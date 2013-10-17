@@ -1,0 +1,33 @@
+{
+    "name": "sadekbaroudi/gitorade",
+    "description": "Git management and automation for software development organizations",
+    "version": "0.0.1",
+    "type": "library",
+    "keywords": ["git", "management", "automation", "branch", "merge"],
+    "homepage": "https://bitbucket.org/sadekbaroudi/gitorade",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Sadek Baroudi",
+            "email": "sadekbaroudi@gmail.com",
+            "homepage": "https://bitbucket.org/sadekbaroudi",
+            "role": "Architect, Developer"
+        }
+    ],
+    "autoload": {
+        "psr-0": { "Sadekbaroudi\\Gitorade\\": "" }
+    },
+    "require": {
+        "php": ">=5.3.3",
+        "symfony/console": ">=2.3.5",
+        "symfony/config": ">=2.3.5",
+        "symfony/yaml": ">=2.3.5",
+        "symfony/event-dispatcher": ">=2.3.5",
+        "symfony/filesystem": ">=2.3.5"
+    },
+    "target-dir": "Sadekbaroudi/Gitorade",
+    "config": {
+        "bin-dir": "bin"
+    },
+    "minimum-stability": "stable"
+}
