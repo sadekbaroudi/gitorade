@@ -2,9 +2,7 @@
 
 namespace Sadekbaroudi\Gitorade\Configuration;
 
-use Symfony\Component\Config\Definition\ConfigurationInterface;
-
-interface GitoradeConfigurationInterface extends ConfigurationInterface {
+interface ConfigurationInterface {
     
     public function getConfigFilePath();
     

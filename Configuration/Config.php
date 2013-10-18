@@ -3,31 +3,82 @@
 namespace Sadekbaroudi\Gitorade\Configuration;
 
 use Symfony\Component\Yaml\Yaml;
-use Symfony\Component\Config\Definition\Processor;
-use Sadekbaroudi\Gitorade\Configuration\GitoradeConfigurationInterface;
 
 class Config {
     
-    public function __construct()
+    protected $config;
+    
+    protected $configInterface;
+    
+    public function __construct($configInterface)
     {
-        
+        $this->configInterface = $configInterface;
     }
     
-    public function loadConfig($interface)
+    public function getConfig($key = NULL, $force = FALSE)
     {
-        $config = Yaml::parse($interface->getConfigFilePath());
+        $this->loadIt($force);
         
-        if ($config == $interface->getConfigFilePath()) {
-            $config = $interface->getDefaultConfig();
+        if (is_null($key)) {
+            return $this->config;
+        } else {
+            return isset($this->config[$key]) ? $this->config[$key] : NULL;
+        }
+    }
+    
+    /**
+     * Set config values
+     * 
+     * @param string $key Key to use, can be multi-dimensional, separated by "."
+     * @param mixed $value Set the value to any scalar value
+     */
+    public function setConfig($key, $value)
+    {
+        $this->loadIt();
+        
+        $keysArray = explode('.', $key);
+        
+        if (count($keysArray) == 1) {
+            $this->config[$key] = $value;
+        } else {
+            // Dot notation update through references
+            $tmp = &$this->config;
+            foreach(explode('.', $key) as $k) {
+                $tmp = &$tmp[$k];
+            }
+            $tmp = $value;
+        }
+    }
+    
+    public function writeConfig()
+    {
+        if (!isset($this->config)) {
+            throw new \LogicException("Config has not been loaded, cannot write file");
+            return FALSE;
         }
         
-        $processor = new Processor();
-        $configuration = new BranchConfiguration();
-        $processedConfiguration = $processor->processConfiguration(
-            $interface,
-            array($config)
-        );
+        $written = file_put_contents($this->configInterface->getConfigFilePath(), Yaml::dump($this->config));
         
-        return $processedConfiguration;
+        if ($written === FALSE) {
+            throw new \LogicException("Could not write config to file");
+            return FALSE;
+        }
+        
+        return true;
+    }
+    
+    protected function loadIt($force = FALSE)
+    {
+        if (!isset($this->config) || $force) {
+            $this->config = Yaml::parse($this->configInterface->getConfigFilePath());
+        }
+        
+        if ($this->config == $this->configInterface->getConfigFilePath()) {
+            $this->config = $this->configInterface->getDefaultConfig();
+        }
+        
+        if (!isset($this->config)) {
+            throw new \LogicException("Could not load config for interface " . get_class($this->configInterface));
+        }
     }
 }

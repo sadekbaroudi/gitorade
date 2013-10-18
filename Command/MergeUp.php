@@ -7,17 +7,13 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Filesystem\Filesystem;
 use Sadekbaroudi\Gitorade\Configuration\Config;
-use Sadekbaroudi\Gitorade\Configuration\BranchConfiguration;
+use Sadekbaroudi\Gitorade\Configuration\Type\BranchConfiguration;
 
 class MergeUp extends Command
 {
-    protected $filesystem;
-    
     public function __construct($name = NULL)
     {
-        $this->filesystem = new FileSystem();
         parent::__construct($name);
     }
     
@@ -38,24 +34,10 @@ class MergeUp extends Command
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         $options = $input->getOptions();
-        $this->validateOptions($options);
         
-        $config = new Config();
-        var_dump($config->loadConfig(new BranchConfiguration()));
-        
-        $output->writeln($options['metadata']);
-    }
-    
-    protected function validateOptions($options)
-    {
-        if (!$this->filesystem->exists($options['metadata'])) {
-            throw new \RuntimeException("metadata file must exist");
-        }
-        
-        if (!is_file($options['metadata'])) {
-            throw new \RuntimeException("metadata file must be a file");
-        }
-        
-        
+        $config = new Config(new BranchConfiguration());
+        $output->writeln(var_export($config->getConfig(), true));
+        $output->writeln(var_export($config->setConfig('ibm_production.ibm_r11_hotfix2.ibm_r12.ibm_r13', 'ibm_r20'), true));
+        $output->writeln(var_export($config->writeConfig(), true));
     }
 }

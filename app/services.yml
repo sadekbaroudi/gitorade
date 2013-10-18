@@ -1,0 +1,9 @@
+parameters:
+    Application.name: gitorade
+    
+services:
+    MergeUp:
+        class: Sadekbaroudi\Gitorade\Command\MergeUp
+    Application:
+        class: Symfony\Component\Console\Application
+        arguments: ["%Application.name%"]
