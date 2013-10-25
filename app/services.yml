@@ -2,8 +2,24 @@ parameters:
     Application.name: gitorade
     
 services:
-    MergeUp:
-        class: Sadekbaroudi\Gitorade\Command\MergeUp
     Application:
         class: Symfony\Component\Console\Application
         arguments: ["%Application.name%"]
+    Gitorade:
+        class: Sadekbaroudi\Gitorade\Gitorade
+    Config:
+        class: Sadekbaroudi\Gitorade\Configuration\Config
+    
+    #Commands
+    MergeUp:
+        class: Sadekbaroudi\Gitorade\Command\MergeUp
+    
+    # Configs
+    BranchConfiguration:
+        class: Sadekbaroudi\Gitorade\Configuration\Type\BranchConfiguration
+    GitConfiguration:
+        class: Sadekbaroudi\Gitorade\Configuration\Type\GitConfiguration
+    
+    # Git Wrapper (cpliakas/git-wrapper)
+    GitWrapper:
+        class: GitWrapper\GitWrapper

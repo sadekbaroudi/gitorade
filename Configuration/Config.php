@@ -10,9 +10,16 @@ class Config {
     
     protected $configInterface;
     
-    public function __construct($configInterface)
+    protected $iKey;
+    
+    public function __construct()
+    {
+    }
+    
+    public function setInterface($configInterface)
     {
         $this->configInterface = $configInterface;
+        $this->iKey = $this->getKey();
     }
     
     public function getConfig($key = NULL, $force = FALSE)
@@ -20,9 +27,16 @@ class Config {
         $this->loadIt($force);
         
         if (is_null($key)) {
-            return $this->config;
+            return $this->config[$this->iKey];
         } else {
-            return isset($this->config[$key]) ? $this->config[$key] : NULL;
+            return isset($this->config[$this->iKey][$key]) ? $this->config[$this->iKey][$key] : NULL;
+        }
+    }
+    
+    protected function checkInitialized()
+    {
+        if (!isset($this->configInterface)) {
+            throw new \LogicException("configInterface undefined!");
         }
     }
     
@@ -32,17 +46,17 @@ class Config {
      * @param string $key Key to use, can be multi-dimensional, separated by "."
      * @param mixed $value Set the value to any scalar value
      */
-    public function setConfig($key, $value)
+    public function setConfig($key, $value, $force = FALSE)
     {
-        $this->loadIt();
+        $this->loadIt($force);
         
         $keysArray = explode('.', $key);
         
         if (count($keysArray) == 1) {
-            $this->config[$key] = $value;
+            $this->config[$this->iKey][$key] = $value;
         } else {
             // Dot notation update through references
-            $tmp = &$this->config;
+            $tmp = &$this->config[$this->iKey];
             foreach(explode('.', $key) as $k) {
                 $tmp = &$tmp[$k];
             }
@@ -52,12 +66,14 @@ class Config {
     
     public function writeConfig()
     {
-        if (!isset($this->config)) {
+        $this->checkInitialized();
+        
+        if (!isset($this->config[$this->iKey])) {
             throw new \LogicException("Config has not been loaded, cannot write file");
             return FALSE;
         }
         
-        $written = file_put_contents($this->configInterface->getConfigFilePath(), Yaml::dump($this->config));
+        $written = file_put_contents($this->configInterface->getConfigFilePath(), Yaml::dump($this->config[$this->iKey]));
         
         if ($written === FALSE) {
             throw new \LogicException("Could not write config to file");
@@ -69,16 +85,24 @@ class Config {
     
     protected function loadIt($force = FALSE)
     {
-        if (!isset($this->config) || $force) {
-            $this->config = Yaml::parse($this->configInterface->getConfigFilePath());
+        $this->checkInitialized();
+        
+        if (!isset($this->config[$this->iKey]) || $force) {
+            $this->config[$this->iKey] = Yaml::parse($this->configInterface->getConfigFilePath());
         }
         
-        if ($this->config == $this->configInterface->getConfigFilePath()) {
-            $this->config = $this->configInterface->getDefaultConfig();
+        if ($this->config[$this->iKey] == $this->configInterface->getConfigFilePath()) {
+            $this->config[$this->iKey] = $this->configInterface->getDefaultConfig();
         }
         
-        if (!isset($this->config)) {
+        if (!isset($this->config[$this->iKey])) {
             throw new \LogicException("Could not load config for interface " . get_class($this->configInterface));
         }
+    }
+    
+    protected function getKey()
+    {
+        $this->checkInitialized();
+        return get_class($this->configInterface);
     }
 }

@@ -6,10 +6,14 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 
-$container = new ContainerBuilder();
-$loader = new YamlFileLoader($container, new FileLocator(__DIR__));
+/*
+ * I know using $GLOBALS['c'] is bad practice, but refactor this for
+ * a better approach where I can access the service container from anywhere
+ */
+$GLOBALS['c'] = new ContainerBuilder();
+$loader = new YamlFileLoader($GLOBALS['c'], new FileLocator(__DIR__));
 $loader->load('services.yml');
 
-$application = $container->get('Application');
-$application->add($container->get('MergeUp'));
+$application = $GLOBALS['c']->get('Application');
+$application->add($GLOBALS['c']->get('MergeUp'));
 $application->run();

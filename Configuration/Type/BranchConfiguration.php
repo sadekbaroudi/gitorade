@@ -14,7 +14,11 @@ class BranchConfiguration implements ConfigurationInterface
     public function getDefaultConfig()
     {
         return array(
-            'master',
+            'origin/ibm_production' => array(
+        	   'origin/ibm_r11_hotfix2' => array(
+            	   'origin/ibm_r12' => 'origin/ibm_r13',
+                ),
+            ),
         );
     }
 }

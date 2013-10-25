@@ -24,7 +24,8 @@
         "symfony/dependency-injection": ">=2.3.5",
         "symfony/config": ">=2.3.5",
         "symfony/finder": ">=2.3.5",
-        "symfony/event-dispatcher": ">=2.3.5"
+        "symfony/event-dispatcher": ">=2.3.5",
+        "cpliakas/git-wrapper": ">=1.1.1"
     },
     "target-dir": "Sadekbaroudi/Gitorade",
     "config": {
