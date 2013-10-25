@@ -51,33 +51,60 @@ class MergeUp extends GitoradeCommand
         $this->mergeUp($this->config->getConfig());
     }
     
-    protected function mergeUp(Array $branchConfig, $unmerged = NULL)
+    protected function mergeUp(Array $branchConfig, $unmerged = array())
     {
         $pushedBranches = array();
         
         var_dump($branchConfig);
         foreach ($branchConfig as $key => $val) {
             if (is_array($val)) {
-                if (is_null($unmerged)) {
+                if (empty($unmerged)) {
+                    // TODO: log this instead
                     echo "1: unmerged = {$key}" . PHP_EOL;
-                    $this->mergeUp($val, $key);
+                    
+                    // Recursive call, since we have nothing to merge yet
+                    $this->mergeUp(
+                        $val,
+                        array('full_branch' => $key, 'shorthand' => $this->git->localBranchName($key))
+                    );
                 } else {
-                    echo "2: {$unmerged} to {$key}" . PHP_EOL;
-                    $result = $this->git->merge($this->git->unexpandBranch($unmerged), $this->git->unexpandBranch($key));
+                    // TODO: log this instead
+                    echo "2: {$unmerged['full_branch']} (shorthand {$unmerged['shorthand']}) to {$key}" . PHP_EOL;
+                    
+                    // Prepare parameter to include shorthand
+                    $unmergedParam = $this->git->unexpandBranch($unmerged['full_branch']);
+                    $unmergedParam['m'] = $unmerged['shorthand'];
+                    
+                    // Call the merge!
+                    $result = $this->git->merge($unmergedParam, $this->git->unexpandBranch($key));
+                    
+                    // Store the pushed branches
                     $pushedBranches[] = $result;
-                    $this->mergeUp($val, $result);
+                    
+                    // Recursive call with next step, including shorthand
+                    $this->mergeUp($val, array('full_branch' => $result, 'shorthand' => $this->git->localBranchName($key)));
                 }
             } else {
-                if (is_null($unmerged)) {
+                if (empty($unmerged)) {
                     echo "3: {$key} to {$val}" . PHP_EOL;
                     $result = $this->git->merge($this->git->unexpandBranch($key), $this->git->unexpandBranch($val));
                     $pushedBranches[] = $result;
                 } else {
-                    echo "4: {$unmerged} to {$key}" . PHP_EOL;
-                    $result = $this->git->merge($this->git->unexpandBranch($unmerged), $this->git->unexpandBranch($key));
+                    echo "4: {$unmerged['full_branch']} (shorthand {$unmerged['shorthand']}) to {$key}" . PHP_EOL;
+                    
+                    // Prepare parameter to include shorthand
+                    $unmergedParam = $this->git->unexpandBranch($unmerged['full_branch']);
+                    $unmergedParam['m'] = $unmerged['shorthand'];
+                    
+                    $result = $this->git->merge($unmergedParam, $this->git->unexpandBranch($key));
                     $pushedBranches[] = $result;
+                    
+                    // Prepare parameter to include shorthand
+                    $unmergedParam = $this->git->unexpandBranch($result);
+                    $unmergedParam['m'] = $this->git->localBranchName($key);
+                    
                     echo "5: {$result} to {$val}" . PHP_EOL;
-                    $result = $this->git->merge($this->git->unexpandBranch($result), $this->git->unexpandBranch($val));
+                    $result = $this->git->merge($unmergedParam, $this->git->unexpandBranch($val));
                     $pushedBranches[] = $result;
                 }
             }
