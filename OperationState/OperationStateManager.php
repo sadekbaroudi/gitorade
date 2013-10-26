@@ -14,37 +14,46 @@ class OperationStateManager {
     
     public function add(OperationState $operation)
     {
-        $this->operationQueue[$this->getKey($operation)] = $operation;
+        $this->operationQueue[$operation->getKey()] = $operation;
     }
     
     public function remove(OperationState $operation = NULL)
     {
         if (is_null($operation)) {
             array_pop($this->operationQueue);
+            return TRUE;
         } else {
             if ($this->isInQueue($operation)) {
-                unset($this->operationQueue[$this->getKey($operation)]);
+                unset($this->operationQueue[$operation->getKey()]);
+                return TRUE;
             }
+            return FALSE;
         }
     }
     
     public function isInQueue(OperationState $operation)
     {
-        return isset($this->operationQueue[$this->getKey($operation)]);
+        return isset($this->operationQueue[$operation->getKey()]);
     }
     
     public function executeAll()
     {
+        $results = array();
+        
         foreach ($this->operationQueue as $object) {
-            $this->execute($object);
+            $results[$object->getKey()] = $this->execute($object);
         }
+        
+        return $results;
     }
     
     public function execute(OperationState $object)
     {
-        $object->execute();
-        $this->executed[$this->getKey($object)] = $object;
+        $result = $object->execute();
+        $this->executed[$object->getKey()] = $object;
         $this->remove($object);
+        
+        return $result;
     }
     
     public function undoAll()
@@ -53,18 +62,17 @@ class OperationStateManager {
             return;
         }
         
+        $results = array();
+        
         while ($object = array_pop($this->executed)) {
-            $this->undo($object);
+            $results[$object->getKey()] = $this->undo($object);
         }
+        
+        return $results;
     }
     
     public function undo(OperationState $object)
     {
-        $object->undo();
-    }
-    
-    protected function getKey($object)
-    {
-        return md5(serialize($object));        
+        return $object->undo();
     }
 }

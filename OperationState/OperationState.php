@@ -2,11 +2,16 @@
 
 namespace Sadekbaroudi\Gitorade\OperationState;
 
+/**
+ * This class defines
+ * 
+ * @author sadekbaroudi
+ */
 class OperationState {
     
-    protected $executeParameters;
+    protected $executeParameters = array();
     
-    protected $undoParameters;
+    protected $undoParameters = array();
     
     public function setExecute($object, $method, $arguments = array())
     {
@@ -100,5 +105,10 @@ class OperationState {
         } else {
             throw new \RuntimeException("\$params['object'] is not a valid object");
         }
+    }
+    
+    public function getKey()
+    {
+        return md5(serialize($this));
     }
 }
