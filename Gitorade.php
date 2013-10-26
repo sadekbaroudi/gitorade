@@ -3,6 +3,8 @@
 namespace Sadekbaroudi\Gitorade;
 
 use GitWrapper\GitException;
+use Sadekbaroudi\Gitorade\OperationState\OperationStateManager;
+use Sadekbaroudi\Gitorade\OperationState\OperationState;
 
 class Gitorade {
     
@@ -22,6 +24,8 @@ class Gitorade {
     
     protected $fetched = array();
     
+    protected $osm;
+    
     public function __construct()
     {
         
@@ -36,6 +40,8 @@ class Gitorade {
 
         $this->config->setInterface($GLOBALS['c']->get('GitConfiguration'));
         $this->gitConfig = $this->config->getConfig();
+        
+        $this->osm = new OperationStateManager();
         
         $this->initializeRepo();
     }
@@ -98,27 +104,28 @@ class Gitorade {
     
         $beforeMergeBranch = $this->currentBranch();
     
-        // If we have changes, we stash them to restore state when we're done
         $this->stash();
-    
+        
         $localTempBranchTo = (!empty($branchFrom['m']) ? $branchFrom['m'] : $branchFrom['b']) .
                              "_to_" .
                              (!empty($branchTo['m']) ? $branchTo['m'] : $branchTo['b']) .
                              "_" .
                              gmdate('YmdHi');
         
-        $this->git->checkout($this->expandBranchName($branchTo));
-        $this->git->checkoutNewBranch($localTempBranchTo);
-    
+        // TODO: PHP 5.4 supports "new Foo()->method()->method()"
+        //       http://docs.php.net/manual/en/migration54.new-features.php
+        $os = new OperationState();
+        $os->setExecute($this->git, 'checkout', array($this->expandBranchName($branchTo)));
+        $os->addExecute($this->git, 'checkoutNewBranch', array($localTempBranchTo));
+        $os->setUndo($this->git, 'branch', array($localTempBranchTo, array('D' => true)));
+        $os->addUndo($this->git, 'checkout', array($beforeMergeBranch));
+        $os->addUndo($this->git, 'reset', array(array('hard' => true)));
+        $this->osm->execute($os);
+        
         try {
             $this->git->merge($this->expandBranchName($branchFrom));
         } catch (GitException $e) {
-            // TODO: Register actions through a stack processor, that allows you to track how to "undo" everything
-            // without having to duplicate calls, see "TODO: look up twice" below
-            $this->git->reset(array('hard' => true));
-            $this->git->checkout($beforeMergeBranch);
-            $this->git->branch($localTempBranchTo, array('D' => true));
-            $this->unstash();
+            $this->osm->undoAll();
     
             throw new GitException("Could not merge " . $this->expandBranchName($branchFrom) .
                 " into " . $this->expandBranchName($branchTo) .
@@ -132,22 +139,12 @@ class Gitorade {
         try {
             $this->push($this->unexpandBranch("{$this->gitConfig['push_alias']}/{$localTempBranchTo}"));
         } catch (GitException $e) {
-            // TODO: Register actions through a stack processor, that allows you to track how to "undo" everything
-            // without having to duplicate calls, see "TODO: look up twice" below
-            $this->git->reset(array('hard' => true));
-            $this->git->checkout($beforeMergeBranch);
-            $this->git->branch($localTempBranchTo, array('D' => true));
-            $this->unstash();
-            
+            $this->osm->undoAll();
             throw $e;
         }
+        
+        $this->osm->undoAll();
             
-        // TODO: look up twice
-        $this->git->reset(array('hard' => true));
-        $this->git->checkout($beforeMergeBranch);
-        $this->git->branch($localTempBranchTo, array('D' => true));
-        $this->unstash();
-    
         return "{$this->gitConfig['push_alias']}/{$localTempBranchTo}";
         //var_dump($this->branches);
     }
@@ -335,8 +332,13 @@ class Gitorade {
     protected function stash()
     {
         if ($this->git->hasChanges()) {
+            // If we have changes, we stash them to restore state when we're done
+            $os = new OperationState();
+            $os->setExecute($this->git, 'run', array(array('stash')));
+            $os->setUndo($this, 'unstash');
+            
             // TODO: log
-            $this->git->run(array('stash'));
+            $this->osm->execute($os);
             $this->stashStack++;
         }
     }
