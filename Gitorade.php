@@ -5,25 +5,66 @@ namespace Sadekbaroudi\Gitorade;
 use GitWrapper\GitException;
 use Sadekbaroudi\OperationState\OperationStateManager;
 use Sadekbaroudi\OperationState\OperationState;
+use Sadekbaroudi\Gitorade\Configuration\Config;
+use GitWrapper\GitWrapper;
+use GitWrapper\GitWorkingCopy;
+use Github\Client;
 
 class Gitorade {
     
+    /**
+     * The config object to pull configs
+     * @var Config
+     */
     protected $config;
     
+    /**
+     * Contains the git configuration for pulling data
+     * @var array
+     */
     protected $gitConfig;
     
-    protected $branches;
-    
+    /**
+     * Placeholder for the GitWrapper object, used to get the GitWorkingCopy object, etc
+     * @var GitWrapper
+     */
     protected $gitWrapper;
     
+    /**
+     * Holds the GitWorkingCopy object to make git calls at the command line
+     * @var GitWorkingCopy
+     */
     protected $git;
     
+    /**
+     * Github client to make pull requests for the merges
+     * @var Client
+     */
     protected $github;
     
+    /**
+     * Contains the branches list for reference
+     * @var array
+     */
+    protected $branches;
+    
+    /**
+     * We track the number of stashes, since the git API doesn't
+     * @var integer
+     */
     protected $stashStack = 0;
     
+    /**
+     * We track all the repositories that we have fetched during this script so we don't fetch
+     * multiple times.
+     * @var array
+     */
     protected $fetched = array();
     
+    /**
+     * We use this object to track all the operations we use, so we can undo in the case of an error
+     * @var OperationStateManager
+     */
     protected $osm;
     
     public function __construct()
@@ -120,6 +161,7 @@ class Gitorade {
         $os->setUndo($this->git, 'branch', array($localTempBranchTo, array('D' => true)));
         $os->addUndo($this->git, 'checkout', array($beforeMergeBranch));
         $os->addUndo($this->git, 'reset', array(array('hard' => true)));
+        
         $this->osm->add($os);
         try {
             $this->osm->execute($os);
