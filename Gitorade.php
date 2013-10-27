@@ -120,7 +120,13 @@ class Gitorade {
         $os->setUndo($this->git, 'branch', array($localTempBranchTo, array('D' => true)));
         $os->addUndo($this->git, 'checkout', array($beforeMergeBranch));
         $os->addUndo($this->git, 'reset', array(array('hard' => true)));
-        $this->osm->execute($os);
+        $this->osm->add($os);
+        try {
+            $this->osm->execute($os);
+        } catch (OperationStateException $e) {
+            $this->osm->undoAll();
+            throw $e;
+        }
         
         try {
             $this->git->merge($this->expandBranchName($branchFrom));
@@ -336,6 +342,7 @@ class Gitorade {
             $os = new OperationState();
             $os->setExecute($this->git, 'run', array(array('stash')));
             $os->setUndo($this, 'unstash');
+            $this->osm->add($os);
             
             // TODO: log
             $this->osm->execute($os);
