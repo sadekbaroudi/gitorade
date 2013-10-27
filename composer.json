@@ -27,7 +27,7 @@
         "symfony/event-dispatcher": ">=2.3.5",
         "cpliakas/git-wrapper": ">=1.1.1",
         "knplabs/github-api": "*",
-        "sadekbaroudi/operation-state": "*"
+        "sadekbaroudi/operation-state": "*@dev"
     },
     "config": {
         "bin-dir": "bin"

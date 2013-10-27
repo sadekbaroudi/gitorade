@@ -3,8 +3,8 @@
 namespace Sadekbaroudi\Gitorade;
 
 use GitWrapper\GitException;
-use Sadekbaroudi\Gitorade\OperationState\OperationStateManager;
-use Sadekbaroudi\Gitorade\OperationState\OperationState;
+use Sadekbaroudi\OperationState\OperationStateManager;
+use Sadekbaroudi\OperationState\OperationState;
 
 class Gitorade {
     
