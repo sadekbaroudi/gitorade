@@ -26,9 +26,9 @@
         "symfony/finder": ">=2.3.5",
         "symfony/event-dispatcher": ">=2.3.5",
         "cpliakas/git-wrapper": ">=1.1.1",
-        "knplabs/github-api": "*"
+        "knplabs/github-api": "*",
+        "sadekbaroudi/operation-state": "*"
     },
-    "target-dir": "Sadekbaroudi/Gitorade",
     "config": {
         "bin-dir": "bin"
     },
