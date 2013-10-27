@@ -32,5 +32,6 @@
     "config": {
         "bin-dir": "bin"
     },
+    "target-dir": "Sadekbaroudi/Gitorade",
     "minimum-stability": "stable"
 }
