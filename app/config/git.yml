@@ -1,7 +1,0 @@
-repository: 'git@github.com:sugareps/Mango.git'
-directory: /home/sadek/www/git/sugareps
-user.name: 'Sadek Baroudi'
-user.email: sadek@sugarcrm.com
-gitBinary: /usr/bin/git
-alias: origin
-push_alias: sadekbaroudi

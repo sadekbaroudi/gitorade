@@ -19,6 +19,8 @@ services:
         class: Sadekbaroudi\Gitorade\Configuration\Type\BranchConfiguration
     GitConfiguration:
         class: Sadekbaroudi\Gitorade\Configuration\Type\GitConfiguration
+    GithubConfiguration:
+        class: Sadekbaroudi\Gitorade\Configuration\Type\GithubConfiguration
     
     # Git Wrapper (cpliakas/git-wrapper)
     GitWrapper:

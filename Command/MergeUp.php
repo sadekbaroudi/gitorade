@@ -15,8 +15,6 @@ class MergeUp extends GitoradeCommand
     
     protected $options;
     
-    protected $debug;
-    
     public function __construct($name = NULL)
     {
         parent::__construct($name);
@@ -33,14 +31,20 @@ class MergeUp extends GitoradeCommand
                InputOption::VALUE_REQUIRED,
                'turn on debug mode by passing true'
             )
+            ->addOption(
+                'pull-request',
+                'p',
+                InputOption::VALUE_REQUIRED,
+                'push the created merge branches to your fork and create pull requests'
+            )
         ;
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         $this->options = $input->getOptions();
-        
-        $this->debug = !empty($this->options['debug']) && $this->options['debug'] == 'true' ? TRUE : FALSE;
+        $this->options['pull-request'] = !empty($this->options['pull-request']) && $this->options['pull-request'] == 'true' ? TRUE : FALSE;
+        $this->options['debug'] = !empty($this->options['debug']) && $this->options['debug'] == 'true' ? TRUE : FALSE;
         
         $this->git = $GLOBALS['c']->get('Gitorade');
         $this->git->init();
@@ -48,10 +52,10 @@ class MergeUp extends GitoradeCommand
         $this->config = $GLOBALS['c']->get('Config');
         $this->config->setInterface($GLOBALS['c']->get('BranchConfiguration'));
         
-        $this->mergeUp($this->config->getConfig());
+        $pushedBranches = $this->mergeUp($this->config->getConfig(), array(), $this->options['pull-request']);
     }
     
-    protected function mergeUp(Array $branchConfig, $unmerged = array())
+    protected function mergeUp(Array $branchConfig, $unmerged = array(), $pullRequest = FALSE)
     {
         $pushedBranches = array();
         
@@ -65,7 +69,8 @@ class MergeUp extends GitoradeCommand
                     // Recursive call, since we have nothing to merge yet
                     $this->mergeUp(
                         $val,
-                        array('full_branch' => $key, 'shorthand' => $this->git->localBranchName($key))
+                        array('full_branch' => $key, 'shorthand' => $this->git->localBranchName($key)),
+                        $pullRequest
                     );
                 } else {
                     // TODO: log this instead
@@ -76,18 +81,18 @@ class MergeUp extends GitoradeCommand
                     $unmergedParam['m'] = $unmerged['shorthand'];
                     
                     // Call the merge!
-                    $result = $this->git->merge($unmergedParam, $this->git->unexpandBranch($key));
+                    $result = $this->git->merge($unmergedParam, $this->git->unexpandBranch($key), $pullRequest);
                     
                     // Store the pushed branches
                     $pushedBranches[] = $result;
                     
                     // Recursive call with next step, including shorthand
-                    $this->mergeUp($val, array('full_branch' => $result, 'shorthand' => $this->git->localBranchName($key)));
+                    $this->mergeUp($val, array('full_branch' => $result, 'shorthand' => $this->git->localBranchName($key)), $pullRequest);
                 }
             } else {
                 if (empty($unmerged)) {
                     echo "3: {$key} to {$val}" . PHP_EOL;
-                    $result = $this->git->merge($this->git->unexpandBranch($key), $this->git->unexpandBranch($val));
+                    $result = $this->git->merge($this->git->unexpandBranch($key), $this->git->unexpandBranch($val), $pullRequest);
                     $pushedBranches[] = $result;
                 } else {
                     echo "4: {$unmerged['full_branch']} (shorthand {$unmerged['shorthand']}) to {$key}" . PHP_EOL;
@@ -96,7 +101,7 @@ class MergeUp extends GitoradeCommand
                     $unmergedParam = $this->git->unexpandBranch($unmerged['full_branch']);
                     $unmergedParam['m'] = $unmerged['shorthand'];
                     
-                    $result = $this->git->merge($unmergedParam, $this->git->unexpandBranch($key));
+                    $result = $this->git->merge($unmergedParam, $this->git->unexpandBranch($key), $pullRequest);
                     $pushedBranches[] = $result;
                     
                     // Prepare parameter to include shorthand
@@ -104,18 +109,21 @@ class MergeUp extends GitoradeCommand
                     $unmergedParam['m'] = $this->git->localBranchName($key);
                     
                     echo "5: {$result} to {$val}" . PHP_EOL;
-                    $result = $this->git->merge($unmergedParam, $this->git->unexpandBranch($val));
+                    $result = $this->git->merge($unmergedParam, $this->git->unexpandBranch($val), $pullRequest);
                     $pushedBranches[] = $result;
                 }
             }
         }
         
-        if ($this->debug) {
+        if ($this->options['debug']) {
             foreach ($pushedBranches as $branchString) {
                 echo "Debug mode on: Deleting {$branchString}" . PHP_EOL;
                 $this->git->remoteDelete($this->getRemoteDeleteArray($branchString));
+                unset($pushedBranches[$branchString]);
             }
         }
+        
+        return $pushedBranches;
     }
     
     protected function getRemoteDeleteArray($branchString)

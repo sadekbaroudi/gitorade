@@ -1,2 +1,0 @@
-origin/ibm_production:
-    origin/ibm_r11_hotfix2: { origin/ibm_r12: origin/ibm_r13 }

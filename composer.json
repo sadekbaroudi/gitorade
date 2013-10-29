@@ -29,6 +29,10 @@
         "knplabs/github-api": "*",
         "sadekbaroudi/operation-state": "*@dev"
     },
+    "require-dev": {
+        "phpunit/phpunit": ">=3.7.0",
+        "satooshi/php-coveralls": "dev-master"
+    },
     "config": {
         "bin-dir": "bin"
     },

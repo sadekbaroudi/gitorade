@@ -9,6 +9,9 @@ use Sadekbaroudi\Gitorade\Configuration\Config;
 use GitWrapper\GitWrapper;
 use GitWrapper\GitWorkingCopy;
 use Github\Client;
+use Github\HttpClient\HttpClient;
+use Github\Exception\RuntimeException;
+use Github\Exception\ValidationFailedException;
 
 class Gitorade {
     
@@ -41,6 +44,12 @@ class Gitorade {
      * @var Client
      */
     protected $github;
+    
+    /**
+     * Contains the github configuration for creating pull requests
+     * @var array
+     */
+    protected $githubConfig;
     
     /**
      * Contains the branches list for reference
@@ -84,6 +93,16 @@ class Gitorade {
         
         $this->osm = new OperationStateManager();
         
+        $this->config->setInterface($GLOBALS['c']->get('GithubConfiguration'));
+        $this->githubConfig = $this->config->getConfig();
+        
+        $this->github = new Client();
+        $this->github->authenticate(
+            !empty($this->githubConfig['token']) ? $this->githubConfig['token'] : $this->githubConfig['username'],
+            !empty($this->githubConfig['token']) ? NULL : $this->githubConfig['password'],
+            !empty($this->githubConfig['token']) ? Client::AUTH_HTTP_TOKEN : NULL
+        );
+        
         $this->initializeRepo();
     }
     
@@ -121,12 +140,13 @@ class Gitorade {
      *              ex: array('b' => 'branch', 'a' => 'origin', 'm' => 'merge_branch_name')
      * @param array $branchTo this contains branch and remote alias (optional), merge branch name (optional)
      *              ex: array('b' => 'branch', 'a' => 'origin', 'm' => 'merge_branch_name')
+     * @param boolean submit the merge pull request when done merging
      * @throws GitException
      */
-    public function merge($branchFrom, $branchTo)
+    public function merge($branchFrom, $branchTo, $submitPullRequest)
     {
         $this->isLoaded();
-    
+        
         if (!$this->branchExists($branchFrom)) {
             throw new GitException("Branch " . $this->expandBranchName($branchFrom) . " does not exist in {$this->gitConfig['repository']}");
         }
@@ -184,17 +204,90 @@ class Gitorade {
         " to " . $this->expandBranchName($branchTo) . PHP_EOL;
         var_dump($logMe);
         
+        $pushName = "{$this->gitConfig['push_alias']}/{$localTempBranchTo}";
+        
         try {
-            $this->push($this->unexpandBranch("{$this->gitConfig['push_alias']}/{$localTempBranchTo}"));
+            $this->push($this->unexpandBranch($pushName));
         } catch (GitException $e) {
             $this->osm->undoAll();
             throw $e;
         }
         
         $this->osm->undoAll();
+        
+        echo "submitPullRequest: "; var_dump($submitPullRequest);
+        if ($submitPullRequest) {
+            // We don't submit a pull request against a local branch
+            if (empty($branchTo['a']) || empty($branchFrom['a'])) {
+                echo "branchTo or branchFrom have empty alias";
+                var_dump($branchTo);
+                var_dump($branchFrom);
+                continue;
+            }
+            $pullRequestArray = array(
+                array(
+                    'user' => $this->getUserFromRepoString($this->gitConfig['repository']),
+                    'repo' => $this->getRepoFromRepoString($this->gitConfig['repository']),
+                    'prContent' => array(
+                        'base' => "{$branchTo['b']}",
+                        'head' => str_replace("/", ":", $pushName),
+                        'title' => "Merge {$branchFrom['b']} to {$branchTo['b']}",
+                        'body' => 'Pushed by Gitorade',
+                    ),
+                )
+            );
             
-        return "{$this->gitConfig['push_alias']}/{$localTempBranchTo}";
+            $this->submitPullRequests($pullRequestArray);
+        }
+        
+        return $pushName;
         //var_dump($this->branches);
+    }
+    
+    /**
+     * This will submit a pull request through the github API
+     * 
+     * @param array $pullRequests should be an array of pull requests in the format:
+     *              array(
+     *                  array(
+     *                      'user' => 'user',
+     *                      'repo' => 'repo',
+     *                      'prContent' => array(
+     *                          'base' => 'baseBranch',
+     *                          'head' => 'repo:headBranch',
+     *                          'title' => 'title',
+     *                          'body' => 'body',
+     *                      )
+     *                  )
+     *              )
+     * 
+     * @return array results of github calls keyed by the same indexes passed in through $pullRequests
+     */
+    public function submitPullRequests($pullRequests)
+    {
+        $this->isLoaded();
+        
+        $return = array();
+        
+        foreach ($pullRequests as $k => $pr) {
+            try {
+                $return[$k] = $this->github->api('pull_request')->create(
+                    $pr['user'],
+                    $pr['repo'],
+                    $pr['prContent']
+                );
+            } catch (ValidationFailedException $e) {
+                // If we have a "no commits between {$branch1} and {$branch2}, we can continue
+                if ($e->getCode() == 422) {
+                    continue;
+                } else {
+                    echo $e->getCode() . "\n";
+                    throw $e;
+                }
+            }
+        }
+        
+        return $return;
     }
     
     /**
@@ -447,6 +540,18 @@ class Gitorade {
         } else {
             return "remotes/{$branchString}";
         }
+    }
+    
+    protected function getUserFromRepoString($repoString)
+    {
+        $userAndRepo = substr($repoString, strrpos($repoString, ":") + 1);
+        return substr($userAndRepo, 0, strrpos($userAndRepo, "/"));
+    }
+    
+    protected function getRepoFromRepoString($repoString)
+    {
+        $userAndRepo = substr($repoString, strrpos($repoString, ":") + 1);
+        return str_replace(".git", "", substr($userAndRepo, strrpos($userAndRepo, "/") + 1));
     }
     
     /**
