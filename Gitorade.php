@@ -178,8 +178,8 @@ class Gitorade {
         $os = new OperationState();
         $os->setExecute($this->git, 'checkout', array($this->expandBranchName($branchTo)));
         $os->addExecute($this->git, 'checkoutNewBranch', array($localTempBranchTo));
-        $os->setUndo($this->git, 'branch', array($localTempBranchTo, array('D' => true)));
-        $os->addUndo($this->git, 'checkout', array($beforeMergeBranch));
+        $os->setUndo($this->git, 'checkout', array($beforeMergeBranch));
+        $os->addUndo($this->git, 'branch', array($localTempBranchTo, array('D' => true)));
         $os->addUndo($this->git, 'reset', array(array('hard' => true)));
         
         $this->osm->add($os);
