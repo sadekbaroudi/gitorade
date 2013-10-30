@@ -184,6 +184,8 @@ class Gitorade {
         
         $this->osm->add($os);
         try {
+            echo "checking out " . $this->expandBranchName($branchTo) . PHP_EOL;
+            echo "checking out new local branch {$localTempBranchTo}" . PHP_EOL;
             $this->osm->execute($os);
         } catch (OperationStateException $e) {
             $this->osm->undoAll();
@@ -191,6 +193,7 @@ class Gitorade {
         }
         
         try {
+            echo "merging " . $this->expandBranchName($branchFrom) . " to " . $this->expandBranchName($branchTo) . PHP_EOL;
             $this->git->merge($this->expandBranchName($branchFrom));
         } catch (GitException $e) {
             $this->osm->undoAll();
@@ -202,11 +205,11 @@ class Gitorade {
         // TODO: log merge success
         $logMe = "Merged " . $this->expandBranchName($branchFrom) .
         " to " . $this->expandBranchName($branchTo) . PHP_EOL;
-        var_dump($logMe);
         
         $pushName = "{$this->gitConfig['push_alias']}/{$localTempBranchTo}";
         
         try {
+            echo "Pushing to {$pushName}" . PHP_EOL;
             $this->push($this->unexpandBranch($pushName));
         } catch (GitException $e) {
             $this->osm->undoAll();
@@ -215,13 +218,10 @@ class Gitorade {
         
         $this->osm->undoAll();
         
-        echo "submitPullRequest: "; var_dump($submitPullRequest);
         if ($submitPullRequest) {
             // We don't submit a pull request against a local branch
             if (empty($branchTo['a']) || empty($branchFrom['a'])) {
-                echo "branchTo or branchFrom have empty alias";
-                var_dump($branchTo);
-                var_dump($branchFrom);
+                echo "branchTo or branchFrom have empty alias" . PHP_EOL;
                 continue;
             }
             $pullRequestArray = array(
@@ -236,12 +236,12 @@ class Gitorade {
                     ),
                 )
             );
+            echo "Submitting pull request: "; var_dump($pullRequestArray); echo PHP_EOL;
             
             $this->submitPullRequests($pullRequestArray);
         }
         
         return $pushName;
-        //var_dump($this->branches);
     }
     
     /**
@@ -279,9 +279,10 @@ class Gitorade {
             } catch (ValidationFailedException $e) {
                 // If we have a "no commits between {$branch1} and {$branch2}, we can continue
                 if ($e->getCode() == 422) {
+                    echo "No commits from {$pr['prContent']['head']} to {$pr['prContent']['base']}" . PHP_EOL;
                     continue;
                 } else {
-                    echo $e->getCode() . "\n";
+                    echo $e->getCode() . PHP_EOL;
                     throw $e;
                 }
             }

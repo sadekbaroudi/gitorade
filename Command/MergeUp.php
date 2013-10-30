@@ -59,11 +59,9 @@ class MergeUp extends GitoradeCommand
     {
         $pushedBranches = array();
         
-        var_dump($branchConfig);
         foreach ($branchConfig as $key => $val) {
             if (is_array($val)) {
                 if (empty($unmerged)) {
-                    // TODO: log this instead
                     echo "1: unmerged = {$key}" . PHP_EOL;
                     
                     // Recursive call, since we have nothing to merge yet
@@ -73,7 +71,6 @@ class MergeUp extends GitoradeCommand
                         $pullRequest
                     );
                 } else {
-                    // TODO: log this instead
                     echo "2: {$unmerged['full_branch']} (shorthand {$unmerged['shorthand']}) to {$key}" . PHP_EOL;
                     
                     // Prepare parameter to include shorthand
