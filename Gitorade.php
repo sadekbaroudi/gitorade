@@ -6,12 +6,14 @@ use GitWrapper\GitException;
 use Sadekbaroudi\OperationState\OperationStateManager;
 use Sadekbaroudi\OperationState\OperationState;
 use Sadekbaroudi\Gitorade\Configuration\Config;
+use Sadekbaroudi\Gitorade\Branches\BranchManager;
 use GitWrapper\GitWrapper;
 use GitWrapper\GitWorkingCopy;
 use Github\Client;
 use Github\HttpClient\HttpClient;
 use Github\Exception\RuntimeException;
 use Github\Exception\ValidationFailedException;
+use Sadekbaroudi\Gitorade\Branches\BranchRemote;
 
 class Gitorade {
     
@@ -19,13 +21,13 @@ class Gitorade {
      * The config object to pull configs
      * @var Config
      */
-    protected $config;
+    protected $configManager;
     
     /**
-     * Contains the git configuration for pulling data
+     * Contains the necessary configurations for this Class, loaded during initialization
      * @var array
      */
-    protected $gitConfig;
+    protected $configs;
     
     /**
      * Placeholder for the GitWrapper object, used to get the GitWorkingCopy object, etc
@@ -46,13 +48,7 @@ class Gitorade {
     protected $github;
     
     /**
-     * Contains the github configuration for creating pull requests
-     * @var array
-     */
-    protected $githubConfig;
-    
-    /**
-     * Contains the branches list for reference
+     * Contains the branches object, a collection of branch objects
      * @var array
      */
     protected $branches;
@@ -86,60 +82,49 @@ class Gitorade {
      */
     public function init()
     {
-        $this->config = $GLOBALS['c']->get('Config');
-
-        $this->config->setInterface($GLOBALS['c']->get('GitConfiguration'));
-        $this->gitConfig = $this->config->getConfig();
-        
         $this->osm = new OperationStateManager();
         
-        $this->config->setInterface($GLOBALS['c']->get('GithubConfiguration'));
-        $this->githubConfig = $this->config->getConfig();
+        $this->configManager = $GLOBALS['c']->get('Config');
+        
+        $this->configManager->setInterface($GLOBALS['c']->get('GitConfiguration'));
+        $this->configs['gitCli'] = $this->configManager->getConfig();
+        
+        $this->configManager->setInterface($GLOBALS['c']->get('GithubConfiguration'));
+        $this->configs['github'] = $this->configManager->getConfig();
         
         $this->github = new Client();
         $this->github->authenticate(
-            !empty($this->githubConfig['token']) ? $this->githubConfig['token'] : $this->githubConfig['username'],
-            !empty($this->githubConfig['token']) ? NULL : $this->githubConfig['password'],
-            !empty($this->githubConfig['token']) ? Client::AUTH_HTTP_TOKEN : NULL
+            !empty($this->configs['github']['token']) ? $this->configs['github']['token'] : $this->configs['github']['username'],
+            !empty($this->configs['github']['token']) ? NULL : $this->configs['github']['password'],
+            !empty($this->configs['github']['token']) ? Client::AUTH_HTTP_TOKEN : NULL
         );
         
-        $this->initializeRepo();
-    }
-    
-    /**
-     *  This should be called by the init() function only. Initializes the repo by cloning if necessary,
-     *  and fetching if it's already cloned. It also sets up the class git objects.
-     */
-    protected function initializeRepo()
-    {
         $this->gitWrapper = $GLOBALS['c']->get('GitWrapper');
-        $this->gitWrapper->setGitBinary($this->gitConfig['gitBinary']);
-    
-        $this->git = $this->gitWrapper->workingCopy($this->gitConfig['directory']);
-    
+        $this->gitWrapper->setGitBinary($this->configs['gitCli']['gitBinary']);
+        
+        $this->git = $this->gitWrapper->workingCopy($this->configs['gitCli']['directory']);
+        
         if (!$this->git->isCloned()) {
-            $this->git->clone($this->gitConfig['repository']);
+            $this->git->clone($this->configs['gitCli']['repository']);
             // TODO: log
-            $logMe = "Cloning repo: {$this->gitConfig['repository']}: Response: " . $this->git->getOutput();
+            $logMe = "Cloning repo: {$this->configs['gitCli']['repository']}: Response: " . $this->git->getOutput();
         } else {
             // TODO: log
-            $this->git->fetch($this->gitConfig['alias']);
-            $logMe = "No need to clone repo {$this->gitConfig['repository']}, ".
+            $this->fetch($this->configs['gitCli']['alias']);
+            $logMe = "No need to clone repo {$this->configs['gitCli']['repository']}, ".
                 "as it already exists, fetching instead. Response:" . $this->git->getOutput();
         }
-    
+        
         $this->loadBranches(TRUE);
         // TODO: throw exception if failure
     }
-    
+        
     /**
      * This method will merge two branches and push to your remote fork, defined in your GitConfiguration
      * config file
      *
-     * @param array $branchFrom this contains branch, remote alias (optional), merge branch name (optional)
-     *              ex: array('b' => 'branch', 'a' => 'origin', 'm' => 'merge_branch_name')
-     * @param array $branchTo this contains branch and remote alias (optional), merge branch name (optional)
-     *              ex: array('b' => 'branch', 'a' => 'origin', 'm' => 'merge_branch_name')
+     * @param Sadekbaroudi\Gitorade\Branches\Branch $branchFrom Branch object representing the branch merging from
+     * @param Sadekbaroudi\Gitorade\Branches\Branch $branchFrom Branch object representing the branch merging to
      * @param boolean submit the merge pull request when done merging
      * @throws GitException
      */
@@ -147,36 +132,32 @@ class Gitorade {
     {
         $this->isLoaded();
         
-        if (!$this->branchExists($branchFrom)) {
-            throw new GitException("Branch " . $this->expandBranchName($branchFrom) . " does not exist in {$this->gitConfig['repository']}");
+        if (!$this->bm->exists($branchFrom)) {
+            throw new GitException("Branch (from) '{$branchFrom}' does not exist in {$this->configs['gitCli']['repository']}");
+        }
+        
+        if ($branchFrom->getType() == 'remote' && !$this->getFetched($branchFrom->getAlias())) {
+            $this->fetch($branchFrom->getAlias());
         }
     
-        if (!empty($branchFrom['a']) && !$this->getFetched($branchFrom['a'])) {
-            $this->fetch($branchFrom['a']);
+        if (!$this->bm->exists($branchTo)) {
+            throw new GitException("Branch (to) '{$branchTo}' does not exist in {$this->configs['gitCli']['repository']}");
         }
     
-        if (!$this->branchExists($branchTo)) {
-            throw new GitException("Branch " . $this->expandBranchName($branchTo) . " does not exist in {$this->gitConfig['repository']}");
+        if ($branchTo->getType() == 'remote' && !$this->getFetched($branchTo->getAlias())) {
+            $this->fetch($branchTo->getAlias());
         }
-    
-        if (!empty($branchTo['a']) && !$this->getFetched($branchTo['a'])) {
-            $this->fetch($branchTo['a']);
-        }
-    
+        
         $beforeMergeBranch = $this->currentBranch();
-    
+        
         $this->stash();
         
-        $localTempBranchTo = (!empty($branchFrom['m']) ? $branchFrom['m'] : $branchFrom['b']) .
-                             "_to_" .
-                             (!empty($branchTo['m']) ? $branchTo['m'] : $branchTo['b']) .
-                             "_" .
-                             gmdate('YmdHi');
+        $localTempBranchTo = $branchFrom->getMergeName() . "_to_" . $branchTo->getMergeName() . "_" . gmdate('YmdHi');
         
         // TODO: PHP 5.4 supports "new Foo()->method()->method()"
         //       http://docs.php.net/manual/en/migration54.new-features.php
         $os = new OperationState();
-        $os->setExecute($this->git, 'checkout', array($this->expandBranchName($branchTo)));
+        $os->setExecute($this->git, 'checkout', array((string)$branchTo));
         $os->addExecute($this->git, 'checkoutNewBranch', array($localTempBranchTo));
         $os->setUndo($this->git, 'checkout', array($beforeMergeBranch));
         $os->addUndo($this->git, 'branch', array($localTempBranchTo, array('D' => true)));
@@ -184,7 +165,7 @@ class Gitorade {
         
         $this->osm->add($os);
         try {
-            echo "checking out " . $this->expandBranchName($branchTo) . PHP_EOL;
+            echo "checking out {$branchTo}" . PHP_EOL;
             echo "checking out new local branch {$localTempBranchTo}" . PHP_EOL;
             $this->osm->execute($os);
         } catch (OperationStateException $e) {
@@ -193,24 +174,20 @@ class Gitorade {
         }
         
         try {
-            echo "merging " . $this->expandBranchName($branchFrom) . " to " . $this->expandBranchName($branchTo) . PHP_EOL;
-            $this->git->merge($this->expandBranchName($branchFrom));
+            echo "merging {$branchFrom} to {$branchTo}" . PHP_EOL;
+            $this->git->merge((string)$branchFrom);
         } catch (GitException $e) {
             $this->osm->undoAll();
-    
-            throw new GitException("Could not merge " . $this->expandBranchName($branchFrom) .
-                " into " . $this->expandBranchName($branchTo) .
-                "There may have been conflicts. Please verify.");
+            throw new GitException("Could not merge {$branchFrom} to {$branchTo}. There may have been conflicts. Please verify.");
         }
         // TODO: log merge success
-        $logMe = "Merged " . $this->expandBranchName($branchFrom) .
-        " to " . $this->expandBranchName($branchTo) . PHP_EOL;
+        $logMe = "Merged {$branchFrom} to {$branchTo}" . PHP_EOL;
         
-        $pushName = "{$this->gitConfig['push_alias']}/{$localTempBranchTo}";
+        $pushObject = new BranchRemote("remotes/{$this->configs['gitCli']['push_alias']}/{$localTempBranchTo}");
         
         try {
-            echo "Pushing to {$pushName}" . PHP_EOL;
-            $this->push($this->unexpandBranch($pushName));
+            echo "Pushing to {$pushObject}" . PHP_EOL;
+            $this->push($pushObject);
         } catch (GitException $e) {
             $this->osm->undoAll();
             throw $e;
@@ -226,12 +203,12 @@ class Gitorade {
             }
             $pullRequestArray = array(
                 array(
-                    'user' => $this->getUserFromRepoString($this->gitConfig['repository']),
-                    'repo' => $this->getRepoFromRepoString($this->gitConfig['repository']),
+                    'user' => $this->getUserFromRepoString($this->configs['gitCli']['repository']),
+                    'repo' => $this->getRepoFromRepoString($this->configs['gitCli']['repository']),
                     'prContent' => array(
-                        'base' => "{$branchTo['b']}",
-                        'head' => str_replace("/", ":", $pushName),
-                        'title' => "Merge {$branchFrom['b']} to {$branchTo['b']}",
+                        'base' => $branchTo->getBranch(),
+                        'head' => $pushObject->getAlias() . ':' . $pushObject->getBranch(),
+                        'title' => "Merge ".$branchFrom->getBranch()." to ".$branchTo->getBranch(),
                         'body' => 'Pushed by Gitorade',
                     ),
                 )
@@ -241,13 +218,13 @@ class Gitorade {
             $this->submitPullRequests($pullRequestArray);
         }
         
-        return $pushName;
+        return $pushObject;
     }
     
     /**
      * This will submit a pull request through the github API
      * 
-     * @param array $pullRequests should be an array of pull requests in the format:
+     * @param array $pullRequests should be an array of pull requests, in the format:
      *              array(
      *                  array(
      *                      'user' => 'user',
@@ -294,20 +271,12 @@ class Gitorade {
     /**
      * Determine if the branch exists in the branch list for this repo (including all remotes or local branches)
      * 
-     * @param string|array $branch can be a branch array or expanded string
-     *              ex 1: $branch = 'remotes/repo_alias/branch_name' // remote branch
-     *              ex 2: $branch = 'branch_name' // local branch
-     *              ex 3: $branch = array('a' => 'repo_alias', 'b' => 'branch_name') // remote branch
-     *              ex 4: $branch = array('b' => 'branch_name') // local branch
+     * @param string 'localbranchname' or 'remotes/alias/branchname'
      * @return boolean TRUE if this branch exists
      */
     public function branchExists($branch)
     {
-        if (is_array($branch)) {
-            return in_array($this->expandBranchName($branch), $this->branches);
-        } else {
-            return in_array($branch, $this->branches);
-        }
+        return in_array($branch, $this->git->getBranches()->all());
     }
 
     
@@ -334,14 +303,13 @@ class Gitorade {
     }
     
     /**
-     * This method will simply delete the remote branch specified in $branchArray
+     * This method will simply delete the remote branch specified in $branchObject
      * 
-     * @param array $branchArray array formatted with $branchArray['a'] being the
-     *                           repo alias and $branchArray['b'] being the branch
+     * @param Sadekbaroudi\Gitorade\Branches\BranchRemote $branchObject object representing branch to delete
      */
-    public function remoteDelete($branchArray)
+    public function remoteDelete($branchObject)
     {
-        $this->git->push($branchArray['a'], ":{$branchArray['b']}");
+        $this->git->push($branchObject->getAlias(), ":" . $branchObject->getBranch());
     }
     
     /**
@@ -366,23 +334,21 @@ class Gitorade {
     /**
      * This will push the branch to the specified alias/branch, and add to the loaded branches
      * 
-     * @param array $branchArray branch in the standard array format ($branchArray = array('a' => 'alias', 'b' => 'branch')
+     * @param Sadekbaroudi\Gitorade\Branches\BranchRemote $branchObject branch object to push
      * @throws GitException
      */
-    protected function push($branchArray)
+    protected function push($branchObject)
     {
         $this->git->clearOutput();
-        $this->git->push($branchArray['a'], $branchArray['b']);;
+        $this->git->push($branchObject->getAlias(), $branchObject->getBranch());
         $pushOutput = $this->git->getOutput();
         if (!empty($pushOutput)) {
-            throw new GitException("Could not push {$localTempBranchTo} to {$this->gitConfig['push_alias']}. ".
+            throw new GitException("Could not push {$localTempBranchTo} to {$this->configs['gitCli']['push_alias']}. ".
                 "Output: " . PHP_EOL . $pushResults);
         } else {
             // TODO: log this
-            $pushed = "{$branchArray['a']}/{$branchArray['b']}";
-            if (!$this->branchExists($pushed)) {
-                $this->addToBranches(array($this->prefixRemotes($pushed)));
-            }
+            $pushed = "remotes/".$branchObject->getAlias()."/".$branchObject->getBranch();
+            $this->bm->add($pushed);
             $logMe = "Successfully pushed {$pushed}!";
             echo $logMe . PHP_EOL;
         }
@@ -395,21 +361,13 @@ class Gitorade {
      */
     protected function loadBranches($force = FALSE)
     {
-        if (!isset($this->branches) || $force) {
+        if (!isset($this->bm) || $force) {
             // TODO: log
-            $this->branches = $this->git->getBranches()->fetchBranches();
-        }
-    }
-    
-    /**
-     * Adds to the globally available branches list, only to be called after push
-     * 
-     * @param array $branches list of branches, should be already prefixed by 'remotes'!
-     */
-    protected function addToBranches(Array $branches)
-    {
-        foreach ($branches as $b) {
-            $this->branches[] = $b;
+            $this->bm = new BranchManager();
+            $branchArray = $this->git->getBranches()->all();
+            foreach ($branchArray as $branchName) {
+                $this->bm->add($branchName);
+            }
         }
     }
     
@@ -511,36 +469,6 @@ class Gitorade {
         $this->git->run(array('stash', 'apply'));
         $this->git->run(array('stash', 'drop', 'stash@{0}'));
         $this->stashStack--;
-    }
-    
-    /**
-     * Will return a string of the full branch name, provided a branch array
-     * 
-     * @param array $branchArray
-     * @return string expanded full branch name based on a provided array
-     */
-    protected function expandBranchName($branchArray)
-    {
-        if (!empty($branchArray['a'])){
-            return $this->prefixRemotes("{$branchArray['a']}/{$branchArray['b']}");
-        } else {
-            return $branchArray['b'];
-        }
-    }
-    
-    /**
-     * Prefixes the "remotes" part of the branch string, unless it's already there
-     * 
-     * @param string $branchString
-     * @return string
-     */
-    protected function prefixRemotes($branchString)
-    {
-        if (substr($branchString, 0, 8) == 'remotes/') {
-            return $branchString;
-        } else {
-            return "remotes/{$branchString}";
-        }
     }
     
     protected function getUserFromRepoString($repoString)
