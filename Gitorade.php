@@ -200,7 +200,7 @@ class Gitorade {
         
         if ($submitPullRequest) {
             // We don't submit a pull request against a local branch
-            if (empty($branchTo['a']) || empty($branchFrom['a'])) {
+            if ($branchFrom->getType() != 'remote' || $branchTo->getType() != 'remote') {
                 echo "branchTo or branchFrom have empty alias" . PHP_EOL;
                 continue;
             }
@@ -211,7 +211,7 @@ class Gitorade {
                     'prContent' => array(
                         'base' => $branchTo->getBranch(),
                         'head' => $pushObject->getAlias() . ':' . $pushObject->getBranch(),
-                        'title' => "Merge ".$branchFrom->getBranch()." to ".$branchTo->getBranch(),
+                        'title' => "Merge ".$branchFrom->getMergeName()." to ".$branchTo->getMergeName(),
                         'body' => 'Pushed by Gitorade',
                     ),
                 )
