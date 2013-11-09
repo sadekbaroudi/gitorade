@@ -16,4 +16,9 @@ $loader->load('services.yml');
 
 $application = $GLOBALS['c']->get('Application');
 $application->add($GLOBALS['c']->get('MergeUp'));
-$application->run();
+try {
+    $application->run();
+} catch (Exception $e) {
+    echo $e->getTraceAsString();
+    throw $e;
+}
