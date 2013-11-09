@@ -19,6 +19,7 @@ class GitConfiguration implements ConfigurationInterface
             'user.name' => 'User Name',
             'user.email' => 'user@example.com',
             'gitBinary' => '/usr/bin/git',
+            'privateKey' => '/home/sadek/.ssh/id_rsa',
             'alias' => 'origin',
             'push_alias' => 'userfork',
         );

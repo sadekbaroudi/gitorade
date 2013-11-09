@@ -99,8 +99,10 @@ class Gitorade {
             !empty($this->configs['github']['token']) ? Client::AUTH_HTTP_TOKEN : NULL
         );
         
-        $this->gitWrapper = $GLOBALS['c']->get('GitWrapper');
-        $this->gitWrapper->setGitBinary($this->configs['gitCli']['gitBinary']);
+        $this->gitWrapper = new GitWrapper($this->configs['gitCli']['gitBinary']);
+        if (!empty($this->configs['gitCli']['privateKey'])) {
+            $this->gitWrapper->setPrivateKey($this->configs['gitCli']['privateKey']);
+        }
         
         $this->git = $this->gitWrapper->workingCopy($this->configs['gitCli']['directory']);
         
@@ -124,7 +126,7 @@ class Gitorade {
      * config file
      *
      * @param Sadekbaroudi\Gitorade\Branches\Branch $branchFrom Branch object representing the branch merging from
-     * @param Sadekbaroudi\Gitorade\Branches\Branch $branchFrom Branch object representing the branch merging to
+     * @param Sadekbaroudi\Gitorade\Branches\Branch $branchTo Branch object representing the branch merging to
      * @param boolean submit the merge pull request when done merging
      * @throws GitException
      */
@@ -184,6 +186,7 @@ class Gitorade {
         $logMe = "Merged {$branchFrom} to {$branchTo}" . PHP_EOL;
         
         $pushObject = new BranchRemote("remotes/{$this->configs['gitCli']['push_alias']}/{$localTempBranchTo}");
+        $pushObject->setMergeName($branchTo->getBranch());
         
         try {
             echo "Pushing to {$pushObject}" . PHP_EOL;

@@ -20,8 +20,13 @@ class MergeUp extends GitoradeCommand
     
     public function __construct($name = NULL)
     {
-        $this->bm = new BranchManager();
+        $this->setBranchManager(new BranchManager());
         parent::__construct($name);
+    }
+    
+    public function setBranchManager($bm)
+    {
+        $this->bm = $bm;
     }
     
     protected function configure()
@@ -32,13 +37,13 @@ class MergeUp extends GitoradeCommand
             ->addOption(
                'debug',
                'd',
-               InputOption::VALUE_REQUIRED,
-               'turn on debug mode by passing true'
+               InputOption::VALUE_NONE,
+               'turn on debug mode'
             )
             ->addOption(
                 'pull-request',
                 'p',
-                InputOption::VALUE_REQUIRED,
+                InputOption::VALUE_NONE,
                 'push the created merge branches to your fork and create pull requests'
             )
             ->addOption(
@@ -53,9 +58,6 @@ class MergeUp extends GitoradeCommand
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         $this->options = $input->getOptions();
-        $this->options['pull-request'] = !empty($this->options['pull-request']) && $this->options['pull-request'] == 'true' ? TRUE : FALSE;
-        $this->options['debug'] = !empty($this->options['debug']) && $this->options['debug'] == 'true' ? TRUE : FALSE;
-        $this->options['interactive'] = !empty($this->options['interactive']) && $this->options['interactive'] == 'true' ? TRUE : FALSE;
         
         $this->git = $GLOBALS['c']->get('Gitorade');
         $this->git->init();
@@ -73,17 +75,14 @@ class MergeUp extends GitoradeCommand
         foreach ($branchConfig as $key => $val) {
             if (is_array($val)) {
                 if (empty($unmerged)) {
-                    echo "1: unmerged = {$key}" . PHP_EOL;
-                    
                     $unmerged = $this->bm->getBranchObjectByName($key);
                     $unmerged->setMergeName($this->git->localBranchName($key));
                     
                     // Recursive call, since we have nothing to merge yet
                     $this->mergeUp($val, $unmerged);
                 } else {
-                    echo "2: {$unmerged} (shorthand ".$unmerged->getMergeName().") to {$key}" . PHP_EOL;
-                    
                     $to = $this->bm->getBranchObjectByName($key);
+                    $to->setMergeName($this->git->localBranchName($key));
                     
                     // Call the merge!
                     $result = $this->git->merge($unmerged, $to, $this->options['pull-request']);
@@ -96,23 +95,25 @@ class MergeUp extends GitoradeCommand
                 }
             } else {
                 if (empty($unmerged)) {
-                    echo "3: {$key} to {$val}" . PHP_EOL;
                     $from = $this->bm->getBranchObjectByName($key);
+                    $from->setMergeName($this->git->localBranchName($key));
+                    
                     $to = $this->bm->getBranchObjectByName($val);
+                    $to->setMergeName($this->git->localBranchName($val));
                     
                     $result = $this->git->merge($from, $to, $this->options['pull-request']);
                     $pushedObjects[] = $result;
                 } else {
-                    echo "4: {$unmerged} (shorthand ".$unmerged->getMergeName().") to {$key}" . PHP_EOL;
-                    
                     $to = $this->bm->getBranchObjectByName($key);
+                    $to->setMergeName($this->git->localBranchName($key));
                     
                     $result = $this->git->merge($unmerged, $to, $this->options['pull-request']);
+                    
                     $pushedObjects[] = $result;
                     
                     $to = $this->bm->getBranchObjectByName($val);
+                    $to->setMergeName($this->git->localBranchName($val));
                     
-                    echo "5: {$result} to {$val}" . PHP_EOL;
                     $result = $this->git->merge($result, $to, $this->options['pull-request']);
                     $pushedObjects[] = $result;
                 }

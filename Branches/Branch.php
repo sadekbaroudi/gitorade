@@ -17,9 +17,10 @@ abstract class Branch {
     public function __construct($branch)
     {
         if (!is_string($branch)) {
-            throw new GitException("Branch Objects must be instantiated with a string");
+            throw new GitException("Branch Objects must be instantiated with a string, " . gettype($branch) . " passed.");
         }
         
+                
         $this->branch = $branch;
         $this->mergeName = $branch;
     }

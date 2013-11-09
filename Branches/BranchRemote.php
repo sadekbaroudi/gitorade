@@ -15,9 +15,7 @@ class BranchRemote extends Branch {
     
     public function __construct($branch)
     {
-        if (!is_string($branch)) {
-            throw new GitException("Branch Objects must be instantiated with a string, " . gettype($branch) . " passed.");
-        }
+        parent::__construct($branch);
         
         if (strpos($branch, "{$this->prefix}/") !== 0) {
             throw new GitException("The BranchRemote must begin with '{$this->prefix}/'");
@@ -33,8 +31,6 @@ class BranchRemote extends Branch {
         $this->alias = $exploded[1];
         $this->branchOnly = $exploded[2];
         $this->mergeName = $this->branchOnly;
-        
-        parent::__construct($branch);
     }
     
     public function getBranch()
