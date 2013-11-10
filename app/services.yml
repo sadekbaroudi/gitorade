@@ -7,8 +7,6 @@ services:
         arguments: ["%Application.name%"]
     Gitorade:
         class: Sadekbaroudi\Gitorade\Gitorade
-    Config:
-        class: Sadekbaroudi\Gitorade\Configuration\Config
     
     #Commands
     MergeUp:

@@ -5,7 +5,6 @@ namespace Sadekbaroudi\Gitorade;
 use GitWrapper\GitException;
 use Sadekbaroudi\OperationState\OperationStateManager;
 use Sadekbaroudi\OperationState\OperationState;
-use Sadekbaroudi\Gitorade\Configuration\Config;
 use Sadekbaroudi\Gitorade\Branches\BranchManager;
 use GitWrapper\GitWrapper;
 use GitWrapper\GitWorkingCopy;
@@ -78,34 +77,31 @@ class Gitorade {
     {
         $this->osm = new OperationStateManager();
         
-        $this->configManager = new Config(new GitConfiguration());
-        $this->configs['gitCli'] = $this->configManager->getConfig();
-        
-        $this->configManager->setInterface(new GithubConfiguration());
-        $this->configs['github'] = $this->configManager->getConfig();
+        $this->configs['gitCli'] = new GitConfiguration();
+        $this->configs['github'] = new GithubConfiguration();
         
         $this->github = new Client();
         $this->github->authenticate(
-            !empty($this->configs['github']['token']) ? $this->configs['github']['token'] : $this->configs['github']['username'],
-            !empty($this->configs['github']['token']) ? NULL : $this->configs['github']['password'],
-            !empty($this->configs['github']['token']) ? Client::AUTH_HTTP_TOKEN : NULL
+            $this->configs['github']->getConfig('token') ? $this->configs['github']->getConfig('token') : $this->configs['github']->getConfig('username'),
+            $this->configs['github']->getConfig('token') ? NULL : $this->configs['github']->getConfig('password'),
+            $this->configs['github']->getConfig('token') ? Client::AUTH_HTTP_TOKEN : NULL
         );
         
-        $this->gitWrapper = new GitWrapper($this->configs['gitCli']['gitBinary']);
-        if (!empty($this->configs['gitCli']['privateKey'])) {
-            $this->gitWrapper->setPrivateKey($this->configs['gitCli']['privateKey']);
+        $this->gitWrapper = new GitWrapper($this->configs['gitCli']->getConfig('gitBinary'));
+        if ($this->configs['gitCli']->getConfig('privateKey')) {
+            $this->gitWrapper->setPrivateKey($this->configs['gitCli']->getConfig('privateKey'));
         }
         
-        $this->git = $this->gitWrapper->workingCopy($this->configs['gitCli']['directory']);
+        $this->git = $this->gitWrapper->workingCopy($this->configs['gitCli']->getConfig('directory'));
         
         if (!$this->git->isCloned()) {
-            $this->git->clone($this->configs['gitCli']['repository']);
+            $this->git->clone($this->configs['gitCli']->getConfig('repository'));
             // TODO: log
-            $logMe = "Cloning repo: {$this->configs['gitCli']['repository']}: Response: " . $this->git->getOutput();
+            $logMe = "Cloning repo: " . $this->configs['gitCli']->getConfig('repository') . ": Response: " . $this->git->getOutput();
         } else {
             // TODO: log
-            $this->fetch($this->configs['gitCli']['alias']);
-            $logMe = "No need to clone repo {$this->configs['gitCli']['repository']}, ".
+            $this->fetch($this->configs['gitCli']->getConfig('alias'));
+            $logMe = "No need to clone repo " . $this->configs['gitCli']->getConfig('repository') . ", ".
                 "as it already exists, fetching instead. Response:" . $this->git->getOutput();
         }
         
@@ -125,7 +121,7 @@ class Gitorade {
     public function merge($branchFrom, $branchTo, $submitPullRequest)
     {
         if (!$this->bm->exists($branchFrom)) {
-            throw new GitException("Branch (from) '{$branchFrom}' does not exist in {$this->configs['gitCli']['repository']}");
+            throw new GitException("Branch (from) '{$branchFrom}' does not exist in " . $this->configs['gitCli']->getConfig('repository'));
         }
         
         if ($branchFrom->getType() == 'remote' && !$this->getFetched($branchFrom->getAlias())) {
@@ -133,7 +129,7 @@ class Gitorade {
         }
     
         if (!$this->bm->exists($branchTo)) {
-            throw new GitException("Branch (to) '{$branchTo}' does not exist in {$this->configs['gitCli']['repository']}");
+            throw new GitException("Branch (to) '{$branchTo}' does not exist in " . $this->configs['gitCli']->getConfig('repository'));
         }
     
         if ($branchTo->getType() == 'remote' && !$this->getFetched($branchTo->getAlias())) {
@@ -175,7 +171,7 @@ class Gitorade {
         // TODO: log merge success
         $logMe = "Merged {$branchFrom} to {$branchTo}" . PHP_EOL;
         
-        $pushObject = new BranchRemote("remotes/{$this->configs['gitCli']['push_alias']}/{$localTempBranchTo}");
+        $pushObject = new BranchRemote("remotes/" . $this->configs['gitCli']->getConfig('push_alias') . "/{$localTempBranchTo}");
         $pushObject->setMergeName($branchTo->getBranch());
         
         try {
@@ -196,8 +192,8 @@ class Gitorade {
             }
             $pullRequestArray = array(
                 array(
-                    'user' => $this->getUserFromRepoString($this->configs['gitCli']['repository']),
-                    'repo' => $this->getRepoFromRepoString($this->configs['gitCli']['repository']),
+                    'user' => $this->getUserFromRepoString($this->configs['gitCli']->getConfig('repository')),
+                    'repo' => $this->getRepoFromRepoString($this->configs['gitCli']->getConfig('repository')),
                     'prContent' => array(
                         'base' => $branchTo->getBranch(),
                         'head' => $pushObject->getAlias() . ':' . $pushObject->getBranch(),
@@ -281,8 +277,8 @@ class Gitorade {
         $this->git->push($branchObject->getAlias(), $branchObject->getBranch());
         $pushOutput = $this->git->getOutput();
         if (!empty($pushOutput)) {
-            throw new GitException("Could not push {$localTempBranchTo} to {$this->configs['gitCli']['push_alias']}. ".
-                "Output: " . PHP_EOL . $pushResults);
+            throw new GitException("Could not push {$localTempBranchTo} to " . $this->configs['gitCli']->getConfig('push_alias') .
+                ". Output: " . PHP_EOL . $pushResults);
         } else {
             // TODO: log this
             $pushed = "remotes/".$branchObject->getAlias()."/".$branchObject->getBranch();

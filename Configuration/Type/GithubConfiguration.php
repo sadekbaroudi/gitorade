@@ -2,9 +2,9 @@
 
 namespace Sadekbaroudi\Gitorade\Configuration\Type;
 
-use Sadekbaroudi\Gitorade\Configuration\ConfigurationInterface;
+use Sadekbaroudi\Gitorade\Configuration\ConfigurationAbstract;
 
-class GithubConfiguration implements ConfigurationInterface
+class GithubConfiguration extends ConfigurationAbstract
 {
     public function getConfigFilePath()
     {

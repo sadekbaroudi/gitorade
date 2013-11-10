@@ -11,7 +11,6 @@ use GitWrapper\GitException;
 use Sadekbaroudi\Gitorade\Branches\BranchManager;
 use Sadekbaroudi\Gitorade\Gitorade;
 use Sadekbaroudi\Gitorade\Configuration\Type\BranchConfiguration;
-use Sadekbaroudi\Gitorade\Configuration\Config;
 
 class MergeUp extends GitoradeCommand
 {
@@ -64,7 +63,7 @@ class MergeUp extends GitoradeCommand
         
         $this->git = new Gitorade();
         
-        $this->config = new Config(new BranchConfiguration());
+        $this->config = new BranchConfiguration();
         
         $pushedBranches = $this->mergeUp($this->config->getConfig());
     }
