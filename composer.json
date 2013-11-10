@@ -27,6 +27,7 @@
         "symfony/event-dispatcher": ">=2.3.5",
         "cpliakas/git-wrapper": ">=1.1.1",
         "knplabs/github-api": "*",
+        "nicmart/tree": "dev-master",
         "sadekbaroudi/operation-state": "*@dev"
     },
     "require-dev": {

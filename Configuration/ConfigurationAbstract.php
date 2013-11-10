@@ -35,6 +35,7 @@ abstract class ConfigurationAbstract {
      * 
      * @param string $key Key to use, can be multi-dimensional, separated by "."
      * @param mixed $value Set the value to any scalar value
+     * @param boolean $force force the refresh before setting a value
      */
     public function setConfig($key, $value, $force = FALSE)
     {

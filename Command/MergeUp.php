@@ -11,6 +11,7 @@ use GitWrapper\GitException;
 use Sadekbaroudi\Gitorade\Branches\BranchManager;
 use Sadekbaroudi\Gitorade\Gitorade;
 use Sadekbaroudi\Gitorade\Configuration\Type\BranchConfiguration;
+use Tree\Node\Node;
 
 class MergeUp extends GitoradeCommand
 {
@@ -65,63 +66,46 @@ class MergeUp extends GitoradeCommand
         
         $this->config = new BranchConfiguration();
         
-        $pushedBranches = $this->mergeUp($this->config->getConfig());
+        $pushedObjects = $this->mergeUp($this->config->getConfig());
+        
+        // If we have debug mode on, we delete the branch!
+        if ($this->options['debug']) {
+            $this->deleteBranches($pushedObjects);
+        }
     }
     
-    protected function mergeUp(Array $branchConfig, $unmerged = NULL)
+    protected function mergeUp(Node $node, $pushedObjects = array())
     {
-        $pushedObjects = array();
-        
-        foreach ($branchConfig as $key => $val) {
-            if (is_array($val)) {
-                if (empty($unmerged)) {
-                    $unmerged = $this->bm->getBranchObjectByName($key);
-                    
-                    // Recursive call, since we have nothing to merge yet
-                    $this->mergeUp($val, $unmerged);
-                } else {
-                    $to = $this->bm->getBranchObjectByName($key);
-                    
-                    // Call the merge!
-                    $result = $this->git->merge($unmerged, $to, $this->options['pull-request']);
-                    
-                    // Store the pushed branches
-                    $pushedObjects[] = $result;
-                    
-                    // Recursive call with next step, including shorthand
-                    $this->mergeUp($val, $result);
-                }
-            } else {
-                if (empty($unmerged)) {
-                    $from = $this->bm->getBranchObjectByName($key);
-                    
-                    $to = $this->bm->getBranchObjectByName($val);
-                    
-                    $result = $this->git->merge($from, $to, $this->options['pull-request']);
-                    $pushedObjects[] = $result;
-                } else {
-                    $to = $this->bm->getBranchObjectByName($key);
-                    
-                    $result = $this->git->merge($unmerged, $to, $this->options['pull-request']);
-                    
-                    $pushedObjects[] = $result;
-                    
-                    $to = $this->bm->getBranchObjectByName($val);
-                    
-                    $result = $this->git->merge($result, $to, $this->options['pull-request']);
-                    $pushedObjects[] = $result;
-                }
-            }
+        // If it's a leaf, we do nothing!
+        if ($node->isLeaf()) {
+            return $pushedObjects;
         }
         
-        if ($this->options['debug']) {
-            foreach ($pushedObjects as $branchObject) {
-                echo "Debug mode on: Deleting {$branchObject}" . PHP_EOL;
-                $this->git->remoteDelete($branchObject);
-                unset($pushedObjects["{$branchObject}"]);
+        // For the root node, we skip it, as it's a placeholder
+        if ($node->getValue() == $this->config->getRootName()) {
+            foreach ($node->getChildren() as $child) {
+                $pushedObjects = $this->mergeUp($child, $pushedObjects);
             }
+            return $pushedObjects;
+        }
+        
+        // If it's any node with children, we merge self into those branches
+        foreach ($node->getChildren() as $child) {
+            $pushedObjects[] = $this->git->merge(
+                $this->bm->getBranchObjectByName($node->getValue()),
+                $this->bm->getBranchObjectByName($child->getValue()),
+                $this->options['pull-request']
+            );
+            $pushedObjects = $this->mergeUp($child, $pushedObjects);
         }
         
         return $pushedObjects;
+    }
+    
+    protected function deleteBranches($pushedObjects) {
+        foreach ($pushedObjects as $branchObject) {
+            echo "Debug mode on: Deleting {$branchObject}" . PHP_EOL;
+            $this->git->remoteDelete($branchObject);
+        }
     }
 }
