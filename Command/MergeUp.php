@@ -64,8 +64,7 @@ class MergeUp extends GitoradeCommand
         
         $this->git = new Gitorade();
         
-        $this->config = new Config();
-        $this->config->setInterface(new BranchConfiguration());
+        $this->config = new Config(new BranchConfiguration());
         
         $pushedBranches = $this->mergeUp($this->config->getConfig());
     }

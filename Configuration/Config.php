@@ -12,8 +12,9 @@ class Config {
     
     protected $iKey;
     
-    public function __construct()
+    public function __construct($configInterface)
     {
+        $this->setInterface($configInterface);
     }
     
     public function setInterface($configInterface)

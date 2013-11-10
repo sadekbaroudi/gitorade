@@ -78,9 +78,7 @@ class Gitorade {
     {
         $this->osm = new OperationStateManager();
         
-        $this->configManager = new Config();
-        
-        $this->configManager->setInterface(new GitConfiguration());
+        $this->configManager = new Config(new GitConfiguration());
         $this->configs['gitCli'] = $this->configManager->getConfig();
         
         $this->configManager->setInterface(new GithubConfiguration());
