@@ -9,6 +9,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Sadekbaroudi\Gitorade\Command;
 use GitWrapper\GitException;
 use Sadekbaroudi\Gitorade\Branches\BranchManager;
+use Sadekbaroudi\Gitorade\Gitorade;
+use Sadekbaroudi\Gitorade\Configuration\Type\BranchConfiguration;
+use Sadekbaroudi\Gitorade\Configuration\Config;
 
 class MergeUp extends GitoradeCommand
 {
@@ -59,11 +62,10 @@ class MergeUp extends GitoradeCommand
     {
         $this->options = $input->getOptions();
         
-        $this->git = $GLOBALS['c']->get('Gitorade');
-        $this->git->init();
+        $this->git = new Gitorade();
         
-        $this->config = $GLOBALS['c']->get('Config');
-        $this->config->setInterface($GLOBALS['c']->get('BranchConfiguration'));
+        $this->config = new Config();
+        $this->config->setInterface(new BranchConfiguration());
         
         $pushedBranches = $this->mergeUp($this->config->getConfig());
     }

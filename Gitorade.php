@@ -14,6 +14,8 @@ use Github\HttpClient\HttpClient;
 use Github\Exception\RuntimeException;
 use Github\Exception\ValidationFailedException;
 use Sadekbaroudi\Gitorade\Branches\BranchRemote;
+use Sadekbaroudi\Gitorade\Configuration\Type\GitConfiguration;
+use Sadekbaroudi\Gitorade\Configuration\Type\GithubConfiguration;
 
 class Gitorade {
     
@@ -74,22 +76,14 @@ class Gitorade {
     
     public function __construct()
     {
-        
-    }
-    
-    /**
-     * Initialize the configs and repository, must be called before this class can be used!
-     */
-    public function init()
-    {
         $this->osm = new OperationStateManager();
         
-        $this->configManager = $GLOBALS['c']->get('Config');
+        $this->configManager = new Config();
         
-        $this->configManager->setInterface($GLOBALS['c']->get('GitConfiguration'));
+        $this->configManager->setInterface(new GitConfiguration());
         $this->configs['gitCli'] = $this->configManager->getConfig();
         
-        $this->configManager->setInterface($GLOBALS['c']->get('GithubConfiguration'));
+        $this->configManager->setInterface(new GithubConfiguration());
         $this->configs['github'] = $this->configManager->getConfig();
         
         $this->github = new Client();
@@ -120,7 +114,7 @@ class Gitorade {
         $this->loadBranches(TRUE);
         // TODO: throw exception if failure
     }
-        
+    
     /**
      * This method will merge two branches and push to your remote fork, defined in your GitConfiguration
      * config file
@@ -132,8 +126,6 @@ class Gitorade {
      */
     public function merge($branchFrom, $branchTo, $submitPullRequest)
     {
-        $this->isLoaded();
-        
         if (!$this->bm->exists($branchFrom)) {
             throw new GitException("Branch (from) '{$branchFrom}' does not exist in {$this->configs['gitCli']['repository']}");
         }
@@ -245,8 +237,6 @@ class Gitorade {
      */
     public function submitPullRequests($pullRequests)
     {
-        $this->isLoaded();
-        
         $return = array();
         
         foreach ($pullRequests as $k => $pr) {
@@ -269,40 +259,6 @@ class Gitorade {
         }
         
         return $return;
-    }
-    
-    /**
-     * Determine if the branch exists in the branch list for this repo (including all remotes or local branches)
-     * 
-     * @param string 'localbranchname' or 'remotes/alias/branchname'
-     * @return boolean TRUE if this branch exists
-     */
-    public function branchExists($branch)
-    {
-        return in_array($branch, $this->git->getBranches()->all());
-    }
-
-    
-    /**
-     * Will take a branch string, and expand it to the array format consumable by this class
-     * 
-     * @param string $branchString formatted as local branch, alias/branchname, or remotes/alias/branchname
-     * @throws GitException
-     * @return array returns an array in the format typically consumable by methods in this class
-     */
-    public function unexpandBranch($branchString)
-    {
-        $exploded = explode('/', $branchString);
-    
-        if (count($exploded) == 1) {
-            return array('b' => $branchString);
-        } elseif (count($exploded) == 2) {
-            return array('b' => $exploded[1], 'a' => $exploded[0]);
-        } elseif (count($exploded) == 3) {
-            return array('b' => $exploded[2], 'a' => $exploded[1]);
-        } else {
-            throw new GitException("Can't unexpand branch strings with more than three sub elements");
-        }
     }
     
     /**
@@ -485,17 +441,5 @@ class Gitorade {
     {
         $userAndRepo = substr($repoString, strrpos($repoString, ":") + 1);
         return str_replace(".git", "", substr($userAndRepo, strrpos($userAndRepo, "/") + 1));
-    }
-    
-    /**
-     * Assert that the init() function has already been called
-     * 
-     * @throws GitException
-     */
-    protected function isLoaded()
-    {
-        if (!isset($this->git)) {
-            throw new GitException(__CLASS__ . ": method called, but repository not initialized");
-        }
     }
 }
