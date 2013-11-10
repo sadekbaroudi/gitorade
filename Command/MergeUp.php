@@ -78,13 +78,11 @@ class MergeUp extends GitoradeCommand
             if (is_array($val)) {
                 if (empty($unmerged)) {
                     $unmerged = $this->bm->getBranchObjectByName($key);
-                    $unmerged->setMergeName($this->git->localBranchName($key));
                     
                     // Recursive call, since we have nothing to merge yet
                     $this->mergeUp($val, $unmerged);
                 } else {
                     $to = $this->bm->getBranchObjectByName($key);
-                    $to->setMergeName($this->git->localBranchName($key));
                     
                     // Call the merge!
                     $result = $this->git->merge($unmerged, $to, $this->options['pull-request']);
@@ -98,23 +96,19 @@ class MergeUp extends GitoradeCommand
             } else {
                 if (empty($unmerged)) {
                     $from = $this->bm->getBranchObjectByName($key);
-                    $from->setMergeName($this->git->localBranchName($key));
                     
                     $to = $this->bm->getBranchObjectByName($val);
-                    $to->setMergeName($this->git->localBranchName($val));
                     
                     $result = $this->git->merge($from, $to, $this->options['pull-request']);
                     $pushedObjects[] = $result;
                 } else {
                     $to = $this->bm->getBranchObjectByName($key);
-                    $to->setMergeName($this->git->localBranchName($key));
                     
                     $result = $this->git->merge($unmerged, $to, $this->options['pull-request']);
                     
                     $pushedObjects[] = $result;
                     
                     $to = $this->bm->getBranchObjectByName($val);
-                    $to->setMergeName($this->git->localBranchName($val));
                     
                     $result = $this->git->merge($result, $to, $this->options['pull-request']);
                     $pushedObjects[] = $result;

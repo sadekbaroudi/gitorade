@@ -271,26 +271,6 @@ class Gitorade {
         $this->git->push($branchObject->getAlias(), ":" . $branchObject->getBranch());
     }
     
-    // TODO: Why isn't this function in the branch objects instead of this class?
-    /**
-     * This will convert any branch string to a local branch name.
-     * ex: * remotes/alias/branchname = branchname
-     *     * alias/branchname = branchname
-     *     * branchname = branchname
-     * 
-     * @param string $branchString branch string
-     * @return string converted to local branch name
-     */
-    public function localBranchName($branchString)
-    {
-        $pos = strrpos($branchString, '/');
-        if ($pos !== FALSE) {
-            $pos++;
-        }
-    
-        return substr($branchString, $pos);
-    }
-    
     /**
      * This will push the branch to the specified alias/branch, and add to the loaded branches
      * 
