@@ -29,11 +29,13 @@ class BranchConfiguration extends ConfigurationAbstract
     public function getDefaultConfig()
     {
         return array(
-            'remotes/origin/ibm_production' => array(
-        	   'remotes/origin/ibm_r12' => array(
-            	   'remotes/origin/ibm_r12_hotfix1' => array(
-            	       'remotes/origin/ibm_r12_hotfix2' => 'remotes/origin/ibm_r13',
-            	   ),
+            'remotes/origin/ibm_r12' => array(
+                'remotes/origin/ibm_r12_sev1_38717_38855_38902_20131106' => array(
+                    'remotes/origin/ibm_production' => array(
+                        'remotes/origin/ibm_r12_hotfix1' => array(
+                            'remotes/origin/ibm_r12_hotfix2' => 'remotes/origin/ibm_r13',
+                        ),
+                    ),
                 ),
             ),
         );
@@ -67,24 +69,49 @@ class BranchConfiguration extends ConfigurationAbstract
         return parent::writeConfig();
     }
     
-    public function convertConfigToTree($config, Node $root)
+    public function convertConfigToTree(Array $config, Node $root)
     {
         foreach ($config as $key => $value) {
-            $node = new Node($key);
-            if (is_array($value)) {
-                $this->convertConfigToTree($value, $node);
+            // If the key is not a string, we're on the last node
+            if (is_integer($key)) {
+                $node = new Node($value);
             } else {
-                $node->addChild(new Node($value));
+                $node = new Node($key);
+                
+                if (is_array($value)) {
+                    $this->convertConfigToTree($value, $node);
+                } else {
+                    $node->addChild(new Node($value));
+                }
             }
+            
             $root->addChild($node);
         }
         
         return $root;
     }
     
-    // TODO: Implement, look at dumpTree below as an example of outputting the node, and map to array creation
-    public function convertTreeToConfig(Node $root, $result = array())
+    public function convertTreeToConfig(Node $node)
     {
+        $result = array();
+        
+        // If we're at the root node, we have to skip it, since it's a placeholder node
+        if ($node->getValue() == $this->getRootName()) {
+            foreach ($node->getChildren() as $child) {
+                $result = array_merge($this->convertTreeToConfig($child), $result);
+            }
+            return $result;
+        }
+        
+        // Actual processing for children of the root below
+        if ($node->isLeaf()) {
+            return $node->getValue();
+        } else {
+            foreach ($node->getChildren() as $child) {
+                $result[$node->getValue()] = $this->convertTreeToConfig($child);
+            }
+            return $result;
+        }
     }
     
     public function refresh()
