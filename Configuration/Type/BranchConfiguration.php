@@ -29,14 +29,8 @@ class BranchConfiguration extends ConfigurationAbstract
     public function getDefaultConfig()
     {
         return array(
-            'remotes/origin/ibm_r12' => array(
-                'remotes/origin/ibm_r12_sev1_38717_38855_38902_20131106' => array(
-                    'remotes/origin/ibm_production' => array(
-                        'remotes/origin/ibm_r12_hotfix1' => array(
-                            'remotes/origin/ibm_r12_hotfix2' => 'remotes/origin/ibm_r13',
-                        ),
-                    ),
-                ),
+            'remotes/origin/ibm_gitorade_production' => array(
+                'remotes/origin/ibm_gitorade_r12_hotfix2' => 'remotes/origin/ibm_gitorade_r13',
             ),
         );
     }

@@ -6,6 +6,9 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\Config\FileLocator;
 use Sadekbaroudi\Gitorade\Command;
 use GitWrapper\GitException;
 use Sadekbaroudi\Gitorade\Branches\BranchManager;
@@ -62,7 +65,8 @@ class MergeUp extends GitoradeCommand
     {
         $this->options = $input->getOptions();
         
-        $this->git = new Gitorade();
+        $this->git = new Gitorade($this->getContainer());
+        $this->git->initialize();
         
         $this->config = new BranchConfiguration();
         
@@ -74,7 +78,16 @@ class MergeUp extends GitoradeCommand
         }
     }
     
-    protected function mergeUp(Node $node, $pushedObjects = array())
+    protected function getContainer()
+    {
+        $container = new ContainerBuilder();
+        $loader = new YamlFileLoader($container, new FileLocator(__DIR__ . "/../app"));
+        $loader->load('services.yml');
+        
+        return $container;
+    }
+    
+    protected function mergeUp(Node $node, $mergeName = '', $pushedObjects = array())
     {
         // If it's a leaf, we do nothing!
         if ($node->isLeaf()) {
@@ -84,19 +97,33 @@ class MergeUp extends GitoradeCommand
         // For the root node, we skip it, as it's a placeholder
         if ($node->getValue() == $this->config->getRootName()) {
             foreach ($node->getChildren() as $child) {
-                $pushedObjects = $this->mergeUp($child, $pushedObjects);
+                $pushedObjects = $this->mergeUp($child, '', $pushedObjects);
             }
             return $pushedObjects;
         }
         
         // If it's any node with children, we merge self into those branches
         foreach ($node->getChildren() as $child) {
-            $pushedObjects[] = $this->git->merge(
-                $this->bm->getBranchObjectByName($node->getValue()),
-                $this->bm->getBranchObjectByName($child->getValue()),
-                $this->options['pull-request']
-            );
-            $pushedObjects = $this->mergeUp($child, $pushedObjects);
+            // Get and prepare the from/to branches based on the node values
+            $from = $this->bm->getBranchObjectByName($node->getValue());
+            if (!empty($mergeName)) {
+                $from->setMergeName($mergeName);
+            }
+            $to = $this->bm->getBranchObjectByName($child->getValue());
+            
+            $pushedObject = $this->git->merge($from, $to);
+            
+            // We want to merge the local branch into it's children, since the pull request will
+            //    not have been merged immediately
+            $child->setValue((string)$pushedObject);
+            
+            if ($this->options['pull-request']) {
+                $this->git->submitPullRequest($pushedObject);
+            }
+            
+            $pushedObjects[] = $pushedObject;
+            
+            $pushedObjects = $this->mergeUp($child, $pushedObject->getMergeName(), $pushedObjects);
         }
         
         return $pushedObjects;

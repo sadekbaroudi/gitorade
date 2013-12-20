@@ -6,17 +6,25 @@ use GitWrapper\GitException;
 use Sadekbaroudi\OperationState\OperationStateManager;
 use Sadekbaroudi\OperationState\OperationState;
 use Sadekbaroudi\Gitorade\Branches\BranchManager;
+use Sadekbaroudi\Gitorade\Branches\BranchRemote;
+use Sadekbaroudi\Gitorade\Configuration\Type\GitConfiguration;
+use Sadekbaroudi\Gitorade\Configuration\Type\GithubConfiguration;
 use GitWrapper\GitWrapper;
 use GitWrapper\GitWorkingCopy;
 use Github\Client;
 use Github\HttpClient\HttpClient;
 use Github\Exception\RuntimeException;
 use Github\Exception\ValidationFailedException;
-use Sadekbaroudi\Gitorade\Branches\BranchRemote;
-use Sadekbaroudi\Gitorade\Configuration\Type\GitConfiguration;
-use Sadekbaroudi\Gitorade\Configuration\Type\GithubConfiguration;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Sadekbaroudi\Gitorade\Branches\BranchPullRequest;
 
 class Gitorade {
+    
+    /**
+     * The ContainerBuilder object that defines the necessary classes for this object
+     * @var ContainerBuilder
+     */
+    protected $container;
     
     /**
      * The config object to pull configs
@@ -46,7 +54,7 @@ class Gitorade {
      * Github client to make pull requests for the merges
      * @var Client
      */
-    protected $github;
+    protected $githubClient;
     
     /**
      * Contains the branches object, a collection of branch objects
@@ -73,40 +81,159 @@ class Gitorade {
      */
     protected $osm;
     
-    public function __construct()
+    /**
+     * We use the branch manager to track the branches we have available in Gitorade
+     * @var BranchManager
+     */
+    protected $bm;
+    
+    /**
+     * Create a Gitorade object, used to run various git operations on the a git checkout, and a github account
+     * 
+     * @param ContainerBuilder $container must contain references for:
+     *                         OperationStateManager -> Sadekbaroudi\OperationState\OperationStateManager
+     *                         GitConfiguration -> Sadekbaroudi\Gitorade\Configuration\Type\GitConfiguration
+     *                         GithubConfiguration -> Sadekbaroudi\Gitorade\Configuration\Type\GithubConfiguration
+     *                         GithubClient -> Github\Client
+     *                         GitWrapper -> GitWrapper\GitWrapper
+     *                         BranchManager -> Sadekbaroudi\Gitorade\Branches\BranchManager
+     */
+    public function __construct(ContainerBuilder $container)
     {
-        $this->osm = new OperationStateManager();
+        $this->setContainer($container);
+    }
+    
+    public function setContainer(ContainerBuilder $container)
+    {
+        $this->container = $container;
+    }
+    
+    public function getContainer()
+    {
+        return $this->container;
+    }
+    
+    public function setOsm(OperationStateManager $osm)
+    {
+        $this->osm = $osm;
+    }
+    
+    public function getOsm()
+    {
+        return $this->osm;
+    }
+    
+    public function setGitCliConfig(GitConfiguration $gitCli)
+    {
+        $this->configs['gitCli'] = $gitCli;
+    }
+    
+    public function getGitCliConfig()
+    {
+        if (!isset($this->configs['gitCli'])) {
+            throw new RuntimeException("gitCli parameter not set in configs property");
+        }
+        return $this->configs['gitCli'];
+    }
+    
+    public function setGithubConfig(GithubConfiguration $github)
+    {
+        $this->configs['github'] = $github;
+    }
+    
+    public function getGithubConfig()
+    {
+        if (!isset($this->configs['github'])) {
+            throw new RuntimeException("github parameter not set in configs property");
+        }
+        return $this->configs['github'];
+    }
+    
+    public function setGithubClient(Client $githubClient)
+    {
+        $this->githubClient = $githubClient;
+    }
+    
+    public function getGithubClient()
+    {
+        return $this->githubClient;
+    }
+    
+    public function setGitWrapper(GitWrapper $gitWrapper)
+    {
+        $this->gitWrapper = $gitWrapper;
+    }
+    
+    public function getGitWrapper()
+    {
+        return $this->gitWrapper;
+    }
+    
+    public function setGit(GitWorkingCopy $git)
+    {
+        $this->git = $git;
+    }
+    
+    public function getGit()
+    {
+        return $this->git;
+    }
+    
+    public function setBm(BranchManager $bm)
+    {
+        $this->bm = $bm;
+    }
+    
+    public function getBm()
+    {
+        return $this->bm;
+    }
+    
+    protected function setStashStack($int)
+    {
+        $this->stashStack = $int;
+    }
+    
+    protected function getStashStack()
+    {
+        return $this->stashStack;
+    }
+    
+    public function initialize()
+    {
+        $this->setOsm($this->getContainer()->get('OperationStateManager'));
         
-        $this->configs['gitCli'] = new GitConfiguration();
-        $this->configs['github'] = new GithubConfiguration();
+        $this->setGitCliConfig($this->getContainer()->get('GitConfiguration'));
+        $this->setGithubConfig($this->getContainer()->get('GithubConfiguration'));
         
-        $this->github = new Client();
-        $this->github->authenticate(
-            $this->configs['github']->getConfig('token') ? $this->configs['github']->getConfig('token') : $this->configs['github']->getConfig('username'),
-            $this->configs['github']->getConfig('token') ? NULL : $this->configs['github']->getConfig('password'),
-            $this->configs['github']->getConfig('token') ? Client::AUTH_HTTP_TOKEN : NULL
+        $this->setGithubClient($this->getContainer()->get('GithubClient'));
+        
+        $this->getGithubClient()->authenticate(
+            $this->getGithubConfig()->getConfig('token') ? $this->getGithubConfig()->getConfig('token') : $this->getGithubConfig()->getConfig('username'),
+            $this->getGithubConfig()->getConfig('token') ? NULL : $this->getGithubConfig()->getConfig('password'),
+            $this->getGithubConfig()->getConfig('token') ? Client::AUTH_HTTP_TOKEN : NULL
         );
         
-        $this->gitWrapper = new GitWrapper($this->configs['gitCli']->getConfig('gitBinary'));
-        if ($this->configs['gitCli']->getConfig('privateKey')) {
-            $this->gitWrapper->setPrivateKey($this->configs['gitCli']->getConfig('privateKey'));
+        $this->getContainer()->setParameter('GitWrapper.git_binary', $this->getGitCliConfig()->getConfig('gitBinary'));
+        $this->setGitWrapper($this->getContainer()->get('GitWrapper'));
+        
+        if ($this->getGitCliConfig()->getConfig('privateKey')) {
+            $this->getGitWrapper()->setPrivateKey($this->getGitCliConfig()->getConfig('privateKey'));
         }
         
-        $this->git = $this->gitWrapper->workingCopy($this->configs['gitCli']->getConfig('directory'));
+        $this->setGit($this->getGitWrapper()->workingCopy($this->getGitCliConfig()->getConfig('directory')));
         
-        if (!$this->git->isCloned()) {
-            $this->git->clone($this->configs['gitCli']->getConfig('repository'));
-            // TODO: log
-            $logMe = "Cloning repo: " . $this->configs['gitCli']->getConfig('repository') . ": Response: " . $this->git->getOutput();
+        if (!$this->getGit()->isCloned()) {
+            $this->getGit()->cloneRepository($this->getGitCliConfig()->getConfig('repository'));
         } else {
-            // TODO: log
-            $this->fetch($this->configs['gitCli']->getConfig('alias'));
-            $logMe = "No need to clone repo " . $this->configs['gitCli']->getConfig('repository') . ", ".
-                "as it already exists, fetching instead. Response:" . $this->git->getOutput();
+            $this->fetch($this->getGitCliConfig()->getConfig('alias'));
         }
         
-        $this->loadBranches(TRUE);
-        // TODO: throw exception if failure
+        $this->setBm($this->getContainer()->get('BranchManager'));
+        $branchArray = $this->getGit()->getBranches()->all();
+        foreach ($branchArray as $branchName) {
+            $this->getBm()->add($branchName);
+        }
     }
     
     /**
@@ -118,23 +245,9 @@ class Gitorade {
      * @param boolean submit the merge pull request when done merging
      * @throws GitException
      */
-    public function merge($branchFrom, $branchTo, $submitPullRequest)
+    public function merge($branchFrom, $branchTo)
     {
-        if (!$this->bm->exists($branchFrom)) {
-            throw new GitException("Branch (from) '{$branchFrom}' does not exist in " . $this->configs['gitCli']->getConfig('repository'));
-        }
-        
-        if ($branchFrom->getType() == 'remote' && !$this->getFetched($branchFrom->getAlias())) {
-            $this->fetch($branchFrom->getAlias());
-        }
-    
-        if (!$this->bm->exists($branchTo)) {
-            throw new GitException("Branch (to) '{$branchTo}' does not exist in " . $this->configs['gitCli']->getConfig('repository'));
-        }
-    
-        if ($branchTo->getType() == 'remote' && !$this->getFetched($branchTo->getAlias())) {
-            $this->fetch($branchTo->getAlias());
-        }
+        $this->validateForMerge($branchFrom, $branchTo);
         
         $beforeMergeBranch = $this->currentBranch();
         
@@ -145,105 +258,138 @@ class Gitorade {
         // TODO: PHP 5.4 supports "new Foo()->method()->method()"
         //       http://docs.php.net/manual/en/migration54.new-features.php
         $os = new OperationState();
-        $os->setExecute($this->git, 'checkout', array((string)$branchTo));
-        $os->addExecute($this->git, 'checkoutNewBranch', array($localTempBranchTo));
-        $os->setUndo($this->git, 'checkout', array($beforeMergeBranch));
-        $os->addUndo($this->git, 'branch', array($localTempBranchTo, array('D' => true)));
-        $os->addUndo($this->git, 'reset', array(array('hard' => true)));
+        $os->setExecute($this->getGit(), 'checkout', array((string)$branchTo));
+        $os->addExecute($this->getGit(), 'checkoutNewBranch', array($localTempBranchTo));
+        $os->setUndo($this->getGit(), 'checkout', array($beforeMergeBranch));
+        $os->addUndo($this->getGit(), 'branch', array($localTempBranchTo, array('D' => true)));
+        $os->addUndo($this->getGit(), 'reset', array(array('hard' => true)));
         
-        $this->osm->add($os);
+        $this->getOsm()->add($os);
         try {
             echo "checking out {$branchTo}" . PHP_EOL;
             echo "checking out new local branch {$localTempBranchTo}" . PHP_EOL;
-            $this->osm->execute($os);
+            $this->getOsm()->execute($os);
         } catch (OperationStateException $e) {
-            $this->osm->undoAll();
+            $this->getOsm()->undoAll();
             throw $e;
         }
         
         try {
             echo "merging {$branchFrom} to {$branchTo}" . PHP_EOL;
-            $this->git->merge((string)$branchFrom);
+            $this->getGit()->merge((string)$branchFrom);
         } catch (GitException $e) {
-            $this->osm->undoAll();
+            $this->getOsm()->undoAll();
             throw new GitException("Could not merge {$branchFrom} to {$branchTo}. There may have been conflicts. Please verify.");
         }
         // TODO: log merge success
         $logMe = "Merged {$branchFrom} to {$branchTo}" . PHP_EOL;
         
-        $pushObject = new BranchRemote("remotes/" . $this->configs['gitCli']->getConfig('push_alias') . "/{$localTempBranchTo}");
+        $pushObject = new BranchPullRequest("remotes/" . $this->getGitCliConfig()->getConfig('push_alias') . "/{$localTempBranchTo}");
         $pushObject->setMergeName($branchTo->getBranch());
         
         try {
             echo "Pushing to {$pushObject}" . PHP_EOL;
             $this->push($pushObject);
         } catch (GitException $e) {
-            $this->osm->undoAll();
+            $this->getOsm()->undoAll();
             throw $e;
         }
         
-        $this->osm->undoAll();
+        $this->getOsm()->undoAll();
         
-        if ($submitPullRequest) {
+        // Set pull request data on pushObject
+        if ($branchTo->getType() == 'remote') {
+            $pushObject->setFrom($branchFrom);
+            $pushObject->setTo($branchTo);
+        } else {
             // We don't submit a pull request against a local branch
-            if ($branchFrom->getType() != 'remote' || $branchTo->getType() != 'remote') {
-                echo "branchTo or branchFrom have empty alias" . PHP_EOL;
-                continue;
-            }
-            $pullRequestArray = array(
-                array(
-                    'user' => $this->getUserFromRepoString($this->configs['gitCli']->getConfig('repository')),
-                    'repo' => $this->getRepoFromRepoString($this->configs['gitCli']->getConfig('repository')),
-                    'prContent' => array(
-                        'base' => $branchTo->getBranch(),
-                        'head' => $pushObject->getAlias() . ':' . $pushObject->getBranch(),
-                        'title' => "Merge ".$branchFrom->getMergeName()." to ".$branchTo->getMergeName(),
-                        'body' => 'Pushed by Gitorade',
-                    ),
-                )
-            );
-            echo "Submitting pull request: "; var_dump($pullRequestArray); echo PHP_EOL;
-            
-            $this->submitPullRequests($pullRequestArray);
+            $logMe = "Can't prepare pull request since branchFrom and/or branchTo have an empty alias";
+            echo $logMe . PHP_EOL;
+            //throw new GitException("branchTo or branchFrom have empty alias");
         }
         
         return $pushObject;
     }
     
     /**
-     * This will submit a pull request through the github API
-     * 
-     * @param array $pullRequests should be an array of pull requests, in the format:
-     *              array(
-     *                  array(
-     *                      'user' => 'user',
-     *                      'repo' => 'repo',
-     *                      'prContent' => array(
-     *                          'base' => 'baseBranch',
-     *                          'head' => 'repo:headBranch',
-     *                          'title' => 'title',
-     *                          'body' => 'body',
-     *                      )
-     *                  )
-     *              )
-     * 
-     * @return array results of github calls keyed by the same indexes passed in through $pullRequests
+     * This method will validate the from and to branches for merging, as well as fetch the associated branch data from the remote alias
+     *
+     * @param Sadekbaroudi\Gitorade\Branches\Branch $branchFrom Branch object representing the branch merging from
+     * @param Sadekbaroudi\Gitorade\Branches\Branch $branchTo Branch object representing the branch merging to
+     * @throws GitException
      */
-    public function submitPullRequests($pullRequests)
+    protected function validateForMerge($branchFrom, $branchTo)
+    {
+        if (!$this->getBm()->exists($branchFrom)) {
+            throw new GitException("Branch (from) '{$branchFrom}' does not exist in " . $this->getGitCliConfig()->getConfig('repository'));
+        }
+        
+        if ($branchFrom->getType() == 'remote' && !$this->getFetched($branchFrom->getAlias())) {
+            $this->fetch($branchFrom->getAlias());
+        }
+        
+        if (!$this->getBm()->exists($branchTo)) {
+            throw new GitException("Branch (to) '{$branchTo}' does not exist in " . $this->getGitCliConfig()->getConfig('repository'));
+        }
+        
+        if ($branchTo->getType() == 'remote' && !$this->getFetched($branchTo->getAlias())) {
+            $this->fetch($branchTo->getAlias());
+        }
+    }
+    
+    /**
+     * Singular version of call to submitPullRequests, submits a pull request through the github API
+     * 
+     * @param Sadekbaroudi\Gitorade\Branches\BranchPullRequest $pushObject a BranchPullRequest object with branchFrom and branchTo
+     * @return array results of pull request create execution
+     */
+    public function submitPullRequest($pushObject)
+    {
+        return $this->submitPullRequests(array($pushObject));
+    }
+    
+    /**
+     * This will submit a pull request through the github API
+     *
+     * @param array $pushObjects should be an array of BranchPullRequest objects with
+     *                           branchFrom and branchTo populated, in the format:
+     *
+     * @return array results of github calls keyed by the same indexes passed in through $pushObjects
+     */
+    public function submitPullRequests($pushObjects)
     {
         $return = array();
         
-        foreach ($pullRequests as $k => $pr) {
+        foreach ($pushObjects as $k => $po) {
+            if (!$po->canSubmitPullRequest()) {
+                throw new GitException("branchTo or branchFrom are not set on the pushObject {$po}");
+            }
+            
+            $pr = array(
+                'user' => $this->getUserFromRepoString($this->getGitCliConfig()->getConfig('repository')),
+                'repo' => $this->getRepoFromRepoString($this->getGitCliConfig()->getConfig('repository')),
+                'prContent' => array(
+                    'base' => $po->getTo()->getBranch(),
+                    'head' => $po->getAlias() . ':' . $po->getBranch(),
+                    'title' => "Merge ".$po->getFrom()->getMergeName()." to ".$po->getTo()->getMergeName(),
+                    'body' => 'Pushed by Gitorade',
+                )
+            );
+            
             try {
-                $return[$k] = $this->github->api('pull_request')->create(
+                $return[$k] = $this->getGithubClient()->api('pull_request')->create(
                     $pr['user'],
                     $pr['repo'],
                     $pr['prContent']
                 );
+                
+                echo "Submitting pull request: "; var_dump($pr); echo PHP_EOL;
+                
             } catch (ValidationFailedException $e) {
                 // If we have a "no commits between {$branch1} and {$branch2}, we can continue
                 if ($e->getCode() == 422) {
-                    echo "No commits from {$pr['prContent']['head']} to {$pr['prContent']['base']}" . PHP_EOL;
+                    $logMe = "No commits from {$pr['prContent']['head']} to {$pr['prContent']['base']}";
+                    echo $logMe . PHP_EOL . PHP_EOL;
                     continue;
                 } else {
                     echo $e->getCode() . PHP_EOL;
@@ -251,7 +397,7 @@ class Gitorade {
                 }
             }
         }
-        
+                
         return $return;
     }
     
@@ -262,7 +408,7 @@ class Gitorade {
      */
     public function remoteDelete($branchObject)
     {
-        $this->git->push($branchObject->getAlias(), ":" . $branchObject->getBranch());
+        $this->getGit()->push($branchObject->getAlias(), ":" . $branchObject->getBranch());
     }
     
     /**
@@ -273,35 +419,18 @@ class Gitorade {
      */
     protected function push($branchObject)
     {
-        $this->git->clearOutput();
-        $this->git->push($branchObject->getAlias(), $branchObject->getBranch());
-        $pushOutput = $this->git->getOutput();
+        $this->getGit()->clearOutput();
+        $this->getGit()->push($branchObject->getAlias(), $branchObject->getBranch());
+        $pushOutput = $this->getGit()->getOutput();
         if (!empty($pushOutput)) {
-            throw new GitException("Could not push {$localTempBranchTo} to " . $this->configs['gitCli']->getConfig('push_alias') .
+            throw new GitException("Could not push {$localTempBranchTo} to " . $this->getGitCliConfig()->getConfig('push_alias') .
                 ". Output: " . PHP_EOL . $pushResults);
         } else {
             // TODO: log this
             $pushed = "remotes/".$branchObject->getAlias()."/".$branchObject->getBranch();
-            $this->bm->add($pushed);
+            $this->getBm()->add($pushed);
             $logMe = "Successfully pushed {$pushed}!";
             echo $logMe . PHP_EOL;
-        }
-    }
-    
-    /**
-     * Load all the branches to the local class, acts as a cache
-     * 
-     * @param boolean $force Force the refresh even if we have already loaded the branches
-     */
-    protected function loadBranches($force = FALSE)
-    {
-        if (!isset($this->bm) || $force) {
-            // TODO: log
-            $this->bm = new BranchManager();
-            $branchArray = $this->git->getBranches()->all();
-            foreach ($branchArray as $branchName) {
-                $this->bm->add($branchName);
-            }
         }
     }
     
@@ -312,7 +441,7 @@ class Gitorade {
      */
     protected function fetch($alias)
     {
-        $this->git->fetch($alias);
+        $this->getGit()->fetch($alias);
         $this->setFetched($alias);
     }
     
@@ -345,9 +474,9 @@ class Gitorade {
      */
     protected function currentBranch()
     {
-        $this->git->clearOutput();
-        $this->git->run(array('rev-parse', '--abbrev-ref', 'HEAD'));
-        return trim($this->git->getOutput());
+        $this->getGit()->clearOutput();
+        $this->getGit()->run(array('rev-parse', '--abbrev-ref', 'HEAD'));
+        return trim($this->getGit()->getOutput());
     }
     
     /**
@@ -357,7 +486,7 @@ class Gitorade {
      */
     protected function hasStashes()
     {
-        return $this->stashStack > 0;
+        return $this->getStashStack() > 0;
     }
     
     /**
@@ -365,16 +494,16 @@ class Gitorade {
      */
     protected function stash()
     {
-        if ($this->git->hasChanges()) {
+        if ($this->getGit()->hasChanges()) {
             // If we have changes, we stash them to restore state when we're done
             $os = new OperationState();
-            $os->setExecute($this->git, 'run', array(array('stash')));
+            $os->setExecute($this->getGit(), 'run', array(array('stash')));
             $os->setUndo($this, 'unstash');
-            $this->osm->add($os);
+            $this->getOsm()->add($os);
             
             // TODO: log
-            $this->osm->execute($os);
-            $this->stashStack++;
+            $this->getOsm()->execute($os);
+            $this->setStashStack($this->getStashStack() + 1);
         }
     }
     
@@ -400,9 +529,9 @@ class Gitorade {
      */
     protected function unstashOne()
     {
-        $this->git->run(array('stash', 'apply'));
-        $this->git->run(array('stash', 'drop', 'stash@{0}'));
-        $this->stashStack--;
+        $this->getGit()->run(array('stash', 'apply'));
+        $this->getGit()->run(array('stash', 'drop', 'stash@{0}'));
+        $this->setStashStack($this->getStashStack() - 1);
     }
     
     protected function getUserFromRepoString($repoString)

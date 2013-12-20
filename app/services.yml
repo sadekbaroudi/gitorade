@@ -19,3 +19,15 @@ services:
         class: Sadekbaroudi\Gitorade\Configuration\Type\GitConfiguration
     GithubConfiguration:
         class: Sadekbaroudi\Gitorade\Configuration\Type\GithubConfiguration
+    
+    GithubClient:
+        class: Github\Client
+    GitWrapper:
+        class: GitWrapper\GitWrapper
+        arguments: ["%GitWrapper.git_binary%"]
+    
+    OperationStateManager:
+        class: Sadekbaroudi\OperationState\OperationStateManager
+    
+    BranchManager:
+        class: Sadekbaroudi\Gitorade\Branches\BranchManager
