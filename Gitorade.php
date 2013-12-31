@@ -352,7 +352,7 @@ class Gitorade {
      * This will submit a pull request through the github API
      *
      * @param array $pushObjects should be an array of BranchPullRequest objects with
-     *                           branchFrom and branchTo populated, in the format:
+     *                           branchFrom and branchTo populated.
      *
      * @return array results of github calls keyed by the same indexes passed in through $pushObjects
      */

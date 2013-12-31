@@ -24,6 +24,12 @@ class MergeUp extends GitoradeCommand
     
     protected $bm;
     
+    protected $dialog;
+    
+    protected $input;
+    
+    protected $output;
+    
     public function __construct($name = NULL)
     {
         $this->setBranchManager(new BranchManager());
@@ -33,6 +39,31 @@ class MergeUp extends GitoradeCommand
     public function setBranchManager($bm)
     {
         $this->bm = $bm;
+    }
+    
+    protected function setDialog($dialog)
+    {
+        $this->dialog = $dialog;
+    }
+    
+    protected function setInput($input)
+    {
+        $this->input = $input;
+    }
+    
+    protected function setOutput($output)
+    {
+        $this->output = $output;
+    }
+    
+    protected function getOutput()
+    {
+        return $this->output;
+    }
+    
+    protected function getInput()
+    {
+        return $this->input;
     }
     
     protected function configure()
@@ -65,10 +96,15 @@ class MergeUp extends GitoradeCommand
     {
         $this->options = $input->getOptions();
         
+        $this->setInput($input);
+        $this->setOutput($output);
+        
         $this->git = new Gitorade($this->getContainer());
         $this->git->initialize();
         
         $this->config = new BranchConfiguration();
+        
+        $this->setDialog($this->getHelperSet()->get('dialog'));
         
         $pushedObjects = $this->mergeUp($this->config->getConfig());
         
@@ -111,6 +147,9 @@ class MergeUp extends GitoradeCommand
             }
             $to = $this->bm->getBranchObjectByName($child->getValue());
             
+            if ($this->options['interactive']) {
+                $this->dialog->askConfirmation($this->getOutput(), "Merge from {$from} to {$to}: ", FALSE);
+            }
             $pushedObject = $this->git->merge($from, $to);
             
             // We want to merge the local branch into it's children, since the pull request will
@@ -118,6 +157,9 @@ class MergeUp extends GitoradeCommand
             $child->setValue((string)$pushedObject);
             
             if ($this->options['pull-request']) {
+                if ($this->options['interactive']) {
+                    $this->dialog->askConfirmation($this->getOutput(), "Submit pull request for {$pushedObject}: ", FALSE);
+                }
                 $this->git->submitPullRequest($pushedObject);
             }
             
