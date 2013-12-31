@@ -258,11 +258,11 @@ class Gitorade {
         // TODO: PHP 5.4 supports "new Foo()->method()->method()"
         //       http://docs.php.net/manual/en/migration54.new-features.php
         $os = new OperationState();
-        $os->setExecute($this->getGit(), 'checkout', array((string)$branchTo));
-        $os->addExecute($this->getGit(), 'checkoutNewBranch', array($localTempBranchTo));
-        $os->setUndo($this->getGit(), 'checkout', array($beforeMergeBranch));
-        $os->addUndo($this->getGit(), 'branch', array($localTempBranchTo, array('D' => true)));
-        $os->addUndo($this->getGit(), 'reset', array(array('hard' => true)));
+        $os->setExecute(array($this->getGit(), 'checkout'), array((string)$branchTo));
+        $os->addExecute(array($this->getGit(), 'checkoutNewBranch'), array($localTempBranchTo));
+        $os->setUndo(array($this->getGit(), 'reset'), array(array('hard' => true)));
+        $os->addUndo(array($this->getGit(), 'checkout'), array($beforeMergeBranch));
+        $os->addUndo(array($this->getGit(), 'branch'), array($localTempBranchTo, array('D' => true)));
         
         $this->getOsm()->add($os);
         try {
@@ -497,8 +497,8 @@ class Gitorade {
         if ($this->getGit()->hasChanges()) {
             // If we have changes, we stash them to restore state when we're done
             $os = new OperationState();
-            $os->setExecute($this->getGit(), 'run', array(array('stash')));
-            $os->setUndo($this, 'unstash');
+            $os->setExecute(array($this->getGit(), 'run'), array('stash'));
+            $os->setUndo(array($this, 'unstash'), OperationState::NO_ARGUMENT);
             $this->getOsm()->add($os);
             
             // TODO: log
