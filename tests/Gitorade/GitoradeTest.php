@@ -9,7 +9,33 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class GitoradeTest extends \PHPUnit_Framework_TestCase {
     
     /**
-     * @covers Sadekbaroudi\Gitorade\Gitorade::__construct
+     * @covers Sadekbaroudi\Gitorade\Gitorade::setContainer
+     */
+    /**
+     * REMOVE THIS COMMENT AND FINISH THIS TEST
+    public function testSetContainer()
+    {
+        $gitorade = $this->getMockBuilder('Sadekbaroudi\Gitorade\Gitorade')
+                         ->disableOriginalConstructor()
+                         ->getMock();
+        
+        $cbMock = $this->getMockBuilder('ContainerBuilder')
+                       ->disableOriginalConstructor()
+                       ->getMock();
+        
+        $gitorade->setContainer($cbMock);
+        
+        $ref = new \ReflectionClass($gitorade);
+        $refProperty = $ref->getProperty('container');
+        $refProperty->setAccessible(TRUE);
+        $container = $refProperty->getValue($gitorade);
+        
+        $this->assertTrue(is_object($container));
+    }
+    */
+    
+    /**
+     * @covers Sadekbaroudi\Gitorade\Gitorade::initialize
      * @dataProvider initializeProvider
      */
     public function testInitialize($gitCliConfig, $gitWorkingCopy, $branchList)

@@ -98,12 +98,12 @@ class Gitorade {
      *                         GitWrapper -> GitWrapper\GitWrapper
      *                         BranchManager -> Sadekbaroudi\Gitorade\Branches\BranchManager
      */
-    public function __construct(ContainerBuilder $container)
+    public function __construct($container)
     {
         $this->setContainer($container);
     }
     
-    public function setContainer(ContainerBuilder $container)
+    public function setContainer($container)
     {
         $this->container = $container;
     }
