@@ -29,8 +29,8 @@ class BranchConfiguration extends ConfigurationAbstract
     public function getDefaultConfig()
     {
         return array(
-            'remotes/origin/ibm_production' => array(
-                'remotes/origin/ibm_r12_hotfix2' => 'remotes/origin/ibm_r13',
+            'remotes/origin/branch_version_1' => array(
+                'remotes/origin/branch_version_2' => 'remotes/origin/branch_version_3',
             ),
         );
     }
