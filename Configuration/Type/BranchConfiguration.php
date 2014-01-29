@@ -56,7 +56,7 @@ class BranchConfiguration extends ConfigurationAbstract
             throw new \LogicException("The configRootNode must be a valid Tree\Node\Node");
         }
         
-        throw new \LogicException("convertTreeToConfig not implemented yet, can't write config!");
+        //throw new \LogicException("convertTreeToConfig not implemented yet, can't write config!");
         
         $this->config = $this->convertTreeToConfig($this->configRootNode);
         
@@ -90,7 +90,7 @@ class BranchConfiguration extends ConfigurationAbstract
         $result = array();
         
         // If we're at the root node, we have to skip it, since it's a placeholder node
-        if ($node->getValue() == $this->getRootName()) {
+        if ($this->isRootNode($node)) {
             foreach ($node->getChildren() as $child) {
                 $result = array_merge($this->convertTreeToConfig($child), $result);
             }
@@ -115,15 +115,40 @@ class BranchConfiguration extends ConfigurationAbstract
         $this->setRootNode($this->convertConfigToTree($this->config, $root));
     }
     
-    public function dumpTree(Node $node, $spaces = 0)
+    public function __toString()
     {
-        echo str_repeat("+", $spaces) . $node->getValue() . PHP_EOL;
+        if (!is_a($this->configRootNode, 'Tree\Node\Node')) {
+            throw new \LogicException(__METHOD__ . ": The configRootNode must be a valid Tree\Node\Node");
+        }
+        
+        return $this->getTree($this->configRootNode);
+    }
+    
+    public function getTree(Node $node, $spaces = 0)
+    {
+        if ($this->isRootNode($node)) {
+            $string = '';
+            foreach ($node->getChildren() as $child) {
+                $string .= $this->getTree($child);
+            }
+            
+            return $string;
+        }
+        
+        $string = str_repeat("+", $spaces) . $node->getValue() . PHP_EOL;
         if ($node->isLeaf()) {
-            return;
+            return $string;
         } else {
             foreach ($node->getChildren() as $child) {
-                $this->dumpTree($child, $spaces + 1);
+                $string .= $this->getTree($child, $spaces + 1);
             }
         }
+        
+        return $string;
+    }
+    
+    protected function isRootNode(Node $node)
+    {
+        return $node->getValue() == $this->getRootName();
     }
 }

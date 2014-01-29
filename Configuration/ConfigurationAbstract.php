@@ -8,6 +8,8 @@ abstract class ConfigurationAbstract {
     
     protected $config;
     
+    protected $defaultWasLoaded;
+    
     public function __construct()
     {
         $this->refresh();
@@ -74,12 +76,20 @@ abstract class ConfigurationAbstract {
         return true;
     }
     
+    public function defaultWasLoaded()
+    {
+        return $this->defaultWasLoaded;
+    }
+    
     protected function refresh()
     {
         $this->config = Yaml::parse($this->getConfigFilePath());
         
         if ($this->config == $this->getConfigFilePath()) {
             $this->config = $this->getDefaultConfig();
+            $this->defaultWasLoaded = true;
+        } else {
+            $this->defaultWasLoaded = false;
         }
         
         if (!isset($this->config)) {

@@ -104,6 +104,10 @@ class MergeUp extends GitoradeCommand
         
         $this->config = new BranchConfiguration();
         
+        if ($this->config->defaultWasLoaded()) {
+            $this->config->writeConfig();
+        }
+        
         $this->setDialog($this->getHelperSet()->get('dialog'));
         
         $pushedObjects = $this->mergeUp($this->config->getConfig());
