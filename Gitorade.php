@@ -343,61 +343,65 @@ class Gitorade {
      * Singular version of call to submitPullRequests, submits a pull request through the github API
      * 
      * @param Sadekbaroudi\Gitorade\Branches\BranchPullRequest $pushObject a BranchPullRequest object with branchFrom and branchTo
+     * @param boolean $useConfig Should we use the git config to pull certain information
      * @return array results of pull request create execution
      */
-    public function submitPullRequest($pushObject)
+    public function submitPullRequest($pushObject, $useConfig = FALSE)
     {
-        return $this->submitPullRequests(array($pushObject));
+        if (!$pushObject->canSubmitPullRequest()) {
+            throw new GitException("branchTo or branchFrom are not set on the pushObject {$pushObject}");
+        }
+        
+        $pr = array(
+            'user' => $this->getUserFromRepoString($this->getGitCliConfig()->getConfig('repository')),
+            'repo' => $this->getRepoFromRepoString($this->getGitCliConfig()->getConfig('repository')),
+            'prContent' => array(
+                'base' => $pushObject->getTo()->getBranch(),
+                'head' => $pushObject->getAlias() . ':' . $pushObject->getBranch(),
+                'title' => "Merge ".$pushObject->getFrom()->getMergeName()." to ".$pushObject->getTo()->getMergeName(),
+                'body' => 'Pushed by Gitorade',
+            )
+        );
+        
+        try {
+            $return = $this->getGithubClient()->api('pull_request')->create(
+                $pr['user'],
+                $pr['repo'],
+                $pr['prContent']
+            );
+        
+            echo "Submitting pull request: "; var_dump($pr); echo PHP_EOL;
+        
+        } catch (ValidationFailedException $e) {
+            // If we have a "no commits between {$branch1} and {$branch2}, we can continue
+            if ($e->getCode() == self::NO_COMMITS) {
+                $logMe = "No commits from {$pr['prContent']['head']} to {$pr['prContent']['base']}";
+                echo $logMe . PHP_EOL . PHP_EOL;
+                continue;
+            } else {
+                echo $e->getCode() . PHP_EOL;
+                throw $e;
+            }
+        }
+        
+        return $return;
     }
     
     /**
-     * This will submit a pull request through the github API
+     * This will submit an array of pull requests via the Singualar submitPullRequest method
      *
      * @param array $pushObjects should be an array of BranchPullRequest objects with
      *                           branchFrom and branchTo populated.
+     * @param boolean $useConfig Should we use the git config to pull certain information
      *
      * @return array results of github calls keyed by the same indexes passed in through $pushObjects
      */
-    public function submitPullRequests($pushObjects)
+    public function submitPullRequests($pushObjects, $useConfig = FALSE)
     {
         $return = array();
         
         foreach ($pushObjects as $k => $po) {
-            if (!$po->canSubmitPullRequest()) {
-                throw new GitException("branchTo or branchFrom are not set on the pushObject {$po}");
-            }
-            
-            $pr = array(
-                'user' => $this->getUserFromRepoString($this->getGitCliConfig()->getConfig('repository')),
-                'repo' => $this->getRepoFromRepoString($this->getGitCliConfig()->getConfig('repository')),
-                'prContent' => array(
-                    'base' => $po->getTo()->getBranch(),
-                    'head' => $po->getAlias() . ':' . $po->getBranch(),
-                    'title' => "Merge ".$po->getFrom()->getMergeName()." to ".$po->getTo()->getMergeName(),
-                    'body' => 'Pushed by Gitorade',
-                )
-            );
-            
-            try {
-                $return[$k] = $this->getGithubClient()->api('pull_request')->create(
-                    $pr['user'],
-                    $pr['repo'],
-                    $pr['prContent']
-                );
-                
-                echo "Submitting pull request: "; var_dump($pr); echo PHP_EOL;
-                
-            } catch (ValidationFailedException $e) {
-                // If we have a "no commits between {$branch1} and {$branch2}, we can continue
-                if ($e->getCode() == self::NO_COMMITS) {
-                    $logMe = "No commits from {$pr['prContent']['head']} to {$pr['prContent']['base']}";
-                    echo $logMe . PHP_EOL . PHP_EOL;
-                    continue;
-                } else {
-                    echo $e->getCode() . PHP_EOL;
-                    throw $e;
-                }
-            }
+            $return[$k] = $this->submitPullRequest($pushObject, $useConfig);
         }
                 
         return $return;
