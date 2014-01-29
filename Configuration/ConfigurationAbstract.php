@@ -19,6 +19,11 @@ abstract class ConfigurationAbstract {
     
     abstract public function getDefaultConfig();
     
+    public function __toString()
+    {
+        return var_export($this->getConfig(), TRUE);
+    }
+    
     public function getConfig($key = NULL, $force = FALSE)
     {
         if ($force) {
