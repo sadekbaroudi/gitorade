@@ -20,6 +20,8 @@ use Sadekbaroudi\Gitorade\Branches\BranchPullRequest;
 
 class Gitorade {
     
+    const NO_COMMITS = 422;
+    
     /**
      * The ContainerBuilder object that defines the necessary classes for this object
      * @var ContainerBuilder
@@ -387,7 +389,7 @@ class Gitorade {
                 
             } catch (ValidationFailedException $e) {
                 // If we have a "no commits between {$branch1} and {$branch2}, we can continue
-                if ($e->getCode() == 422) {
+                if ($e->getCode() == self::NO_COMMITS) {
                     $logMe = "No commits from {$pr['prContent']['head']} to {$pr['prContent']['base']}";
                     echo $logMe . PHP_EOL . PHP_EOL;
                     continue;
