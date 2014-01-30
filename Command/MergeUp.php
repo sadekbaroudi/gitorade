@@ -4,14 +4,10 @@ namespace Sadekbaroudi\Gitorade\Command;
 
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\Config\FileLocator;
+use Symfony\Component\Console\Input\InputOption;
 use Sadekbaroudi\Gitorade\Command;
 use GitWrapper\GitException;
-use Sadekbaroudi\Gitorade\Branches\BranchManager;
 use Sadekbaroudi\Gitorade\Gitorade;
 use Sadekbaroudi\Gitorade\Configuration\Type\BranchConfiguration;
 use Tree\Node\Node;
@@ -20,50 +16,9 @@ class MergeUp extends GitoradeCommand
 {
     protected $branchConfig;
     
-    protected $options;
-    
-    protected $bm;
-    
-    protected $dialog;
-    
-    protected $input;
-    
-    protected $output;
-    
     public function __construct($name = NULL)
     {
-        $this->setBranchManager(new BranchManager());
         parent::__construct($name);
-    }
-    
-    public function setBranchManager($bm)
-    {
-        $this->bm = $bm;
-    }
-    
-    protected function setDialog($dialog)
-    {
-        $this->dialog = $dialog;
-    }
-    
-    protected function setInput($input)
-    {
-        $this->input = $input;
-    }
-    
-    protected function setOutput($output)
-    {
-        $this->output = $output;
-    }
-    
-    protected function getOutput()
-    {
-        return $this->output;
-    }
-    
-    protected function getInput()
-    {
-        return $this->input;
     }
     
     protected function configure()
@@ -94,13 +49,7 @@ class MergeUp extends GitoradeCommand
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $this->options = $input->getOptions();
-        
-        $this->setInput($input);
-        $this->setOutput($output);
-        
-        $this->git = new Gitorade($this->getContainer());
-        $this->git->initialize();
+        parent::execute($input, $output);
         
         $this->config = new BranchConfiguration();
         
@@ -108,23 +57,12 @@ class MergeUp extends GitoradeCommand
             $this->config->writeConfig();
         }
         
-        $this->setDialog($this->getHelperSet()->get('dialog'));
-        
         $pushedObjects = $this->mergeUp($this->config->getConfig());
         
         // If we have debug mode on, we delete the branch!
         if ($this->options['debug']) {
             $this->deleteBranches($pushedObjects);
         }
-    }
-    
-    protected function getContainer()
-    {
-        $container = new ContainerBuilder();
-        $loader = new YamlFileLoader($container, new FileLocator(__DIR__ . "/../app"));
-        $loader->load('services.yml');
-        
-        return $container;
     }
     
     protected function mergeUp(Node $node, $mergeName = '', $pushedObjects = array())
