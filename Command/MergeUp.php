@@ -11,6 +11,7 @@ use GitWrapper\GitException;
 use Sadekbaroudi\Gitorade\Gitorade;
 use Sadekbaroudi\Gitorade\Configuration\Type\BranchConfiguration;
 use Tree\Node\Node;
+use Sadekbaroudi\Gitorade\Branches\BranchMerge;
 
 class MergeUp extends GitoradeCommand
 {
@@ -92,7 +93,10 @@ class MergeUp extends GitoradeCommand
             if ($this->options['interactive']) {
                 $this->dialog->askConfirmation($this->getOutput(), "Merge from {$from} to {$to}: ", FALSE);
             }
-            $pushedObject = $this->git->merge($from, $to);
+            
+            $branchMerge = new BranchMerge($from, $to);
+            
+            $pushedObject = $this->git->merge($branchMerge);
             
             // We want to merge the local branch into it's children, since the pull request will
             //    not have been merged immediately

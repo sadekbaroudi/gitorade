@@ -17,6 +17,7 @@ use Github\Exception\RuntimeException;
 use Github\Exception\ValidationFailedException;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Sadekbaroudi\Gitorade\Branches\BranchPullRequest;
+use Sadekbaroudi\Gitorade\Branches\BranchMerge;
 
 class Gitorade {
     
@@ -242,34 +243,31 @@ class Gitorade {
      * This method will merge two branches and push to your remote fork, defined in your GitConfiguration
      * config file
      *
-     * @param Sadekbaroudi\Gitorade\Branches\Branch $branchFrom Branch object representing the branch merging from
-     * @param Sadekbaroudi\Gitorade\Branches\Branch $branchTo Branch object representing the branch merging to
+     * @param Sadekbaroudi\Gitorade\Branches\BranchMerge $branchMerge BranchMerge object representing the from and to branches
      * @param boolean submit the merge pull request when done merging
      * @throws GitException
      */
-    public function merge($branchFrom, $branchTo)
+    public function merge(BranchMerge $branchMerge)
     {
-        $this->validateForMerge($branchFrom, $branchTo);
+        $this->validateForMerge($branchMerge);
         
         $beforeMergeBranch = $this->currentBranch();
         
         $this->stash();
         
-        $localTempBranchTo = $branchFrom->getMergeName() . "_to_" . $branchTo->getMergeName() . "_" . gmdate('YmdHi');
-        
         // TODO: PHP 5.4 supports "new Foo()->method()->method()"
         //       http://docs.php.net/manual/en/migration54.new-features.php
         $os = new OperationState();
-        $os->setExecute(array($this->getGit(), 'checkout'), array((string)$branchTo));
-        $os->addExecute(array($this->getGit(), 'checkoutNewBranch'), array($localTempBranchTo));
+        $os->setExecute(array($this->getGit(), 'checkout'), array((string)$branchMerge->getBranchTo()));
+        $os->addExecute(array($this->getGit(), 'checkoutNewBranch'), array($branchMerge->getMergeName()));
         $os->setUndo(array($this->getGit(), 'reset'), array(array('hard' => true)));
         $os->addUndo(array($this->getGit(), 'checkout'), array($beforeMergeBranch));
-        $os->addUndo(array($this->getGit(), 'branch'), array($localTempBranchTo, array('D' => true)));
+        $os->addUndo(array($this->getGit(), 'branch'), array($branchMerge->getMergeName(), array('D' => true)));
         
         $this->getOsm()->add($os);
         try {
-            echo "checking out {$branchTo}" . PHP_EOL;
-            echo "checking out new local branch {$localTempBranchTo}" . PHP_EOL;
+            echo "checking out " . $branchMerge->getBranchTo() . PHP_EOL;
+            echo "checking out new local branch " . $branchMerge->getMergeName() . PHP_EOL;
             $this->getOsm()->execute($os);
         } catch (OperationStateException $e) {
             $this->getOsm()->undoAll();
@@ -277,17 +275,17 @@ class Gitorade {
         }
         
         try {
-            echo "merging {$branchFrom} to {$branchTo}" . PHP_EOL;
-            $this->getGit()->merge((string)$branchFrom);
+            echo "merging " . $branchMerge->getBranchFrom() . " to " . $branchMerge->getBranchTo() . PHP_EOL;
+            $this->getGit()->merge((string)$branchMerge->getBranchFrom());
         } catch (GitException $e) {
             $this->getOsm()->undoAll();
-            throw new GitException("Could not merge {$branchFrom} to {$branchTo}. There may have been conflicts. Please verify.");
+            throw new GitException("Could not merge " . $branchMerge->getBranchFrom() . " to " . $branchMerge->getBranchTo() . ". There may have been conflicts. Please verify.");
         }
         // TODO: log merge success
-        $logMe = "Merged {$branchFrom} to {$branchTo}" . PHP_EOL;
+        $logMe = "Merged " . $branchMerge->getBranchFrom() . " to " . $branchMerge->getBranchTo() . PHP_EOL;
         
-        $pushObject = new BranchPullRequest("remotes/" . $this->getGitCliConfig()->getConfig('push_alias') . "/{$localTempBranchTo}");
-        $pushObject->setMergeName($branchTo->getBranch());
+        $pushObject = new BranchPullRequest("remotes/" . $this->getGitCliConfig()->getConfig('push_alias') . "/" . $branchMerge->getMergeName());
+        $pushObject->setMergeName($branchMerge->getBranchTo()->getBranch());
         
         try {
             echo "Pushing to {$pushObject}" . PHP_EOL;
@@ -300,9 +298,9 @@ class Gitorade {
         $this->getOsm()->undoAll();
         
         // Set pull request data on pushObject
-        if ($branchTo->getType() == 'remote') {
-            $pushObject->setFrom($branchFrom);
-            $pushObject->setTo($branchTo);
+        if ($branchMerge->getBranchTo()->getType() == 'remote') {
+            $pushObject->setFrom($branchMerge->getBranchFrom());
+            $pushObject->setTo($branchMerge->getBranchTo());
         } else {
             // We don't submit a pull request against a local branch
             $logMe = "Can't prepare pull request since branchFrom and/or branchTo have an empty alias";
@@ -316,26 +314,25 @@ class Gitorade {
     /**
      * This method will validate the from and to branches for merging, as well as fetch the associated branch data from the remote alias
      *
-     * @param Sadekbaroudi\Gitorade\Branches\Branch $branchFrom Branch object representing the branch merging from
-     * @param Sadekbaroudi\Gitorade\Branches\Branch $branchTo Branch object representing the branch merging to
+     * @param Sadekbaroudi\Gitorade\Branches\BranchMerge $branchMerge BranchMerge object representing the from and to branches
      * @throws GitException
      */
-    protected function validateForMerge($branchFrom, $branchTo)
+    protected function validateForMerge(BranchMerge $branchMerge)
     {
-        if (!$this->getBm()->exists($branchFrom)) {
-            throw new GitException("Branch (from) '{$branchFrom}' does not exist in " . $this->getGitCliConfig()->getConfig('repository'));
+        if (!$this->getBm()->exists($branchMerge->getBranchFrom())) {
+            throw new GitException("Branch (from) '" . $branchMerge->getBranchFrom() . "' does not exist in " . $this->getGitCliConfig()->getConfig('repository'));
         }
         
-        if ($branchFrom->getType() == 'remote' && !$this->getFetched($branchFrom->getAlias())) {
-            $this->fetch($branchFrom->getAlias());
+        if ($branchMerge->getBranchFrom()->getType() == 'remote' && !$this->getFetched($branchMerge->getBranchFrom()->getAlias())) {
+            $this->fetch($branchMerge->getBranchFrom()->getAlias());
         }
         
-        if (!$this->getBm()->exists($branchTo)) {
-            throw new GitException("Branch (to) '{$branchTo}' does not exist in " . $this->getGitCliConfig()->getConfig('repository'));
+        if (!$this->getBm()->exists($branchMerge->getBranchTo())) {
+            throw new GitException("Branch (to) '" . $branchMerge->getBranchTo() . "' does not exist in " . $this->getGitCliConfig()->getConfig('repository'));
         }
         
-        if ($branchTo->getType() == 'remote' && !$this->getFetched($branchTo->getAlias())) {
-            $this->fetch($branchTo->getAlias());
+        if ($branchMerge->getBranchTo()->getType() == 'remote' && !$this->getFetched($branchMerge->getBranchTo()->getAlias())) {
+            $this->fetch($branchMerge->getBranchTo()->getAlias());
         }
     }
     
