@@ -18,6 +18,8 @@ use Github\Exception\ValidationFailedException;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Sadekbaroudi\Gitorade\Branches\BranchPullRequest;
 use Sadekbaroudi\Gitorade\Branches\BranchMerge;
+use Sadekbaroudi\Gitorade\Branches\BranchLocal;
+use Sadekbaroudi\Gitorade\Branches\BranchGithub;
 
 class Gitorade {
     
@@ -284,12 +286,16 @@ class Gitorade {
         // TODO: log merge success
         $logMe = "Merged " . $branchMerge->getBranchFrom() . " to " . $branchMerge->getBranchTo() . PHP_EOL;
         
-        $pushObject = new BranchPullRequest("remotes/" . $this->getGitCliConfig()->getConfig('push_alias') . "/" . $branchMerge->getMergeName());
-        $pushObject->setMergeName($branchMerge->getBranchTo()->getBranch());
+        // Begin with pushing merged branch to remote
+        $remoteBranch = new BranchRemote("remotes/" . $this->getGitCliConfig()->getConfig('push_alias') . "/" . $branchMerge->getMergeName());
+        $remoteBranch->setMergeName($branchMerge->getBranchTo()->getBranch());
+        
+        $localBranch = new BranchLocal($branchMerge->getMergeName());
+        $localBranch->setRemote($remoteBranch);
         
         try {
-            echo "Pushing to {$pushObject}" . PHP_EOL;
-            $this->push($pushObject);
+            echo "Pushing to {$localBranch}" . PHP_EOL;
+            $this->push($localBranch);
         } catch (GitException $e) {
             $this->getOsm()->undoAll();
             throw $e;
@@ -297,10 +303,33 @@ class Gitorade {
         
         $this->getOsm()->undoAll();
         
-        // Set pull request data on pushObject
+        // Delete this line after testing
+        //return $remoteBranch;
+        
+        $returnArray = array(
+            'remoteBranch' => $remoteBranch,
+        );
+        
+        
+        // Begin with pull request preparation
+        // Set pull request data on remoteBranch
         if ($branchMerge->getBranchTo()->getType() == 'remote') {
-            $pushObject->setFrom($branchMerge->getBranchFrom());
-            $pushObject->setTo($branchMerge->getBranchTo());
+        
+            $returnArray['pullRequest'] = new BranchPullRequest(
+                new BranchGithub(
+                    $this->getGitCliConfig()->getConfig('push_alias'), // it doesn't matter what user, since it uses the logged in user 
+                    $branchMerge->getBranchFrom()->getAlias(),
+                    $branchMerge->getBranchFrom()->getBranch()
+                ),            
+                new BranchGithub(
+                    $this->getUserFromRepoString($this->getGitCliConfig()->getConfig('repository')),
+                    $this->getRepoFromRepoString($this->getGitCliConfig()->getConfig('repository')),
+                    $branchMerge->getBranchTo()->getBranch()
+                ),
+                "Merge ".$branchMerge->getBranchFrom()->getBranch() . " to " . $branchMerge->getBranchTo()->getBranch(),
+                "Pushed by Gitorade"
+            );
+            
         } else {
             // We don't submit a pull request against a local branch
             $logMe = "Can't prepare pull request since branchFrom and/or branchTo have an empty alias";
@@ -308,7 +337,7 @@ class Gitorade {
             //throw new GitException("branchTo or branchFrom have empty alias");
         }
         
-        return $pushObject;
+        return $returnArray;
     }
     
     /**
@@ -339,24 +368,23 @@ class Gitorade {
     /**
      * Singular version of call to submitPullRequests, submits a pull request through the github API
      * 
-     * @param Sadekbaroudi\Gitorade\Branches\BranchPullRequest $pushObject a BranchPullRequest object with branchFrom and branchTo
-     * @param boolean $useConfig Should we use the git config to pull certain information
+     * @param Sadekbaroudi\Gitorade\Branches\BranchPullRequest $branchPr a BranchPullRequest object with branchFrom and branchTo
      * @return array results of pull request create execution
      */
-    public function submitPullRequest($pushObject, $useConfig = FALSE)
+    public function submitPullRequest(BranchPullRequest $branchPr)
     {
-        if (!$pushObject->canSubmitPullRequest()) {
-            throw new GitException("branchTo or branchFrom are not set on the pushObject {$pushObject}");
+        if (!$branchPr->canSubmitPullRequest()) {
+            throw new GitException(__METHOD__ . ": canSubmitPullRequest returned false, bailing: {$branchPr}");
         }
         
         $pr = array(
-            'user' => $this->getUserFromRepoString($this->getGitCliConfig()->getConfig('repository')),
-            'repo' => $this->getRepoFromRepoString($this->getGitCliConfig()->getConfig('repository')),
+            'user' => $branchPr->getBranchTo()->getUser(),
+            'repo' => $branchPr->getBranchTo()->getRepo(),
             'prContent' => array(
-                'base' => $pushObject->getTo()->getBranch(),
-                'head' => $pushObject->getAlias() . ':' . $pushObject->getBranch(),
-                'title' => "Merge ".$pushObject->getFrom()->getMergeName()." to ".$pushObject->getTo()->getMergeName(),
-                'body' => 'Pushed by Gitorade',
+                'base' => $branchPr->getBranchTo()->getBranch(),
+                'head' => $branchPr->getBranchFrom()->getRepo() . ':' . $branchPr->getBranchFrom()->getBranch(),
+                'title' => $branchPr->getTitle(),
+                'body' => $branchPr->getBody(),
             )
         );
         
@@ -374,7 +402,7 @@ class Gitorade {
             if ($e->getCode() == self::NO_COMMITS) {
                 $logMe = "No commits from {$pr['prContent']['head']} to {$pr['prContent']['base']}";
                 echo $logMe . PHP_EOL . PHP_EOL;
-                continue;
+                return FALSE;
             } else {
                 echo $e->getCode() . PHP_EOL;
                 throw $e;
@@ -387,18 +415,17 @@ class Gitorade {
     /**
      * This will submit an array of pull requests via the Singualar submitPullRequest method
      *
-     * @param array $pushObjects should be an array of BranchPullRequest objects with
+     * @param array $prObjects should be an array of BranchPullRequest objects with
      *                           branchFrom and branchTo populated.
-     * @param boolean $useConfig Should we use the git config to pull certain information
      *
-     * @return array results of github calls keyed by the same indexes passed in through $pushObjects
+     * @return array results of github calls keyed by the same indexes passed in through $prObjects
      */
-    public function submitPullRequests($pushObjects, $useConfig = FALSE)
+    public function submitPullRequests($prObjects)
     {
         $return = array();
         
-        foreach ($pushObjects as $k => $po) {
-            $return[$k] = $this->submitPullRequest($pushObject, $useConfig);
+        foreach ($prObjects as $k => $po) {
+            $return[$k] = $this->submitPullRequest($po);
         }
                 
         return $return;
@@ -417,20 +444,24 @@ class Gitorade {
     /**
      * This will push the branch to the specified alias/branch, and add to the loaded branches
      * 
-     * @param Sadekbaroudi\Gitorade\Branches\BranchRemote $branchObject branch object to push
+     * @param Sadekbaroudi\Gitorade\Branches\BranchLocal $branchLocal branch object to push
      * @throws GitException
      */
-    protected function push($branchObject)
+    protected function push(BranchLocal $branchLocal)
     {
+        if (!$branchLocal->hasRemote()) {
+            throw new GitException(__METHOD__ . ": The BranchLocal object must have a remote branch!");
+        }
+        
         $this->getGit()->clearOutput();
-        $this->getGit()->push($branchObject->getAlias(), $branchObject->getBranch());
+        $this->getGit()->push($branchLocal->getRemote()->getAlias(), $branchLocal->getRemote()->getBranch());
         $pushOutput = $this->getGit()->getOutput();
         if (!empty($pushOutput)) {
-            throw new GitException("Could not push {$localTempBranchTo} to " . $this->getGitCliConfig()->getConfig('push_alias') .
+            throw new GitException("Could not push to " . $branchLocal->getRemote()->getAlias() .
                 ". Output: " . PHP_EOL . $pushResults);
         } else {
             // TODO: log this
-            $pushed = "remotes/".$branchObject->getAlias()."/".$branchObject->getBranch();
+            $pushed = "remotes/".$branchLocal->getRemote()->getAlias()."/".$branchLocal->getRemote()->getBranch();
             $this->getBm()->add($pushed);
             $logMe = "Successfully pushed {$pushed}!";
             echo $logMe . PHP_EOL;

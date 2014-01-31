@@ -96,31 +96,31 @@ class MergeUp extends GitoradeCommand
             
             $branchMerge = new BranchMerge($from, $to);
             
-            $pushedObject = $this->git->merge($branchMerge);
+            $pushedObjectArr = $this->git->merge($branchMerge);
             
             // We want to merge the local branch into it's children, since the pull request will
             //    not have been merged immediately
-            $child->setValue((string)$pushedObject);
+            $child->setValue((string)$pushedObjectArr['remoteBranch']);
             
-            if ($this->options['pull-request']) {
+            if ($this->options['pull-request'] && !empty($pushedObjectArr['pullRequest'])) {
                 if ($this->options['interactive']) {
-                    $this->dialog->askConfirmation($this->getOutput(), "Submit pull request for {$pushedObject}: ", FALSE);
+                    $this->dialog->askConfirmation($this->getOutput(), "Submit pull request for {$pushedObjectArr['pullRequest']}: ", FALSE);
                 }
-                $this->git->submitPullRequest($pushedObject);
+                $this->git->submitPullRequest($pushedObjectArr['pullRequest']);
             }
             
-            $pushedObjects[] = $pushedObject;
+            $pushedObjects[] = $pushedObjectArr;
             
-            $pushedObjects = $this->mergeUp($child, $pushedObject->getMergeName(), $pushedObjects);
+            $pushedObjects = $this->mergeUp($child, $pushedObjectArr['remoteBranch']->getMergeName(), $pushedObjects);
         }
         
         return $pushedObjects;
     }
     
     protected function deleteBranches($pushedObjects) {
-        foreach ($pushedObjects as $branchObject) {
-            echo "Debug mode on: Deleting {$branchObject}" . PHP_EOL;
-            $this->git->remoteDelete($branchObject);
+        foreach ($pushedObjects as $returnArray) {
+            echo "Debug mode on: Deleting {$returnArray['remoteBranch']}" . PHP_EOL;
+            $this->git->remoteDelete($returnArray['remoteBranch']);
         }
     }
 }

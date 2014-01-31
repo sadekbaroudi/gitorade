@@ -69,13 +69,4 @@ class BranchMerge {
     {
         return $this->getMergeName();
     }
-    
-    public function merge()
-    {
-        // CONTINUE HERE
-        // NEED TO IMPLEMENT THE MERGE OF THE LOCAL OBJECTS $branchFrom into $branchTo
-        // DO I MOVE GITORADE METHODS INTO HERE?
-        //   THERE IS A DEPENDENCY ON A LOT OF OBJECTS IN THE GITORADE OBJECT
-        // DO I NOT USE THIS METHOD, AND INSTEAD JUST GRAB THE RELEVANT INFO FROM THIS OBJECT TO MERGE?
-    }
 }
