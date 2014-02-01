@@ -317,8 +317,8 @@ class Gitorade {
         
             $returnArray['pullRequest'] = new BranchPullRequest(
                 new BranchGithub(
-                    $this->getGitCliConfig()->getConfig('push_alias'), // it doesn't matter what user, since it uses the logged in user 
-                    $branchMerge->getBranchFrom()->getAlias(),
+                    $this->getGitCliConfig()->getConfig('push_alias'),
+                    $branchMerge->getBranchFrom()->getAlias(), // This is not used, since it's defined by the base repo
                     $branchMerge->getBranchFrom()->getBranch()
                 ),            
                 new BranchGithub(
@@ -382,7 +382,7 @@ class Gitorade {
             'repo' => $branchPr->getBranchTo()->getRepo(),
             'prContent' => array(
                 'base' => $branchPr->getBranchTo()->getBranch(),
-                'head' => $branchPr->getBranchFrom()->getRepo() . ':' . $branchPr->getBranchFrom()->getBranch(),
+                'head' => $branchPr->getBranchFrom()->getUser() . ':' . $branchPr->getBranchFrom()->getBranch(),
                 'title' => $branchPr->getTitle(),
                 'body' => $branchPr->getBody(),
             )
@@ -398,13 +398,13 @@ class Gitorade {
             echo "Submitting pull request: "; var_dump($pr); echo PHP_EOL;
         
         } catch (ValidationFailedException $e) {
+            $logMe = "Error " . $e->getCode() . ": " . $e->getMessage();
+            echo $logMe . PHP_EOL . PHP_EOL;
+            
             // If we have a "no commits between {$branch1} and {$branch2}, we can continue
             if ($e->getCode() == self::NO_COMMITS) {
-                $logMe = "No commits from {$pr['prContent']['head']} to {$pr['prContent']['base']}";
-                echo $logMe . PHP_EOL . PHP_EOL;
                 return FALSE;
             } else {
-                echo $e->getCode() . PHP_EOL;
                 throw $e;
             }
         }

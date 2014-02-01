@@ -10,15 +10,23 @@ use Sadekbaroudi\Gitorade\Command;
 use GitWrapper\GitException;
 use Sadekbaroudi\Gitorade\Gitorade;
 use Tree\Node\Node;
+use Sadekbaroudi\Gitorade\Branches\BranchPullRequest;
+use Sadekbaroudi\Gitorade\Branches\BranchGithub;
 
 class PullRequest extends GitoradeCommand
 {
+    /**
+     * @var Array calculated options based on the user passed arguments (options)
+     */
+    protected $calculated = array();
+    
     protected $requiredOptions = array(
-    	'base_repo',
-        'base_branch',
-        'head_repo',
-        'head_branch',
+        'base',
+        'head',
+        'title',
     );
+    
+    protected $branchFormatString = '$user/$repo/$branch';
     
     public function __construct($name = NULL)
     {
@@ -37,39 +45,56 @@ class PullRequest extends GitoradeCommand
                'turn on debug mode'
             )
             ->addOption(
-                'base_repo',
+                'base',
                 NULL,
                 InputOption::VALUE_REQUIRED,
-                'To: the base repository where the branch exists'
+                "To branch: the base user, repo, and branch (formatted '{$this->branchFormatString}')"
             )
             ->addOption(
-	            'base_branch',
+                'head',
                 NULL,
                 InputOption::VALUE_REQUIRED,
-                'To: The base branch where the pull request commits will go'
+                "From branch: the head user, repo, and branch (formatted '{$this->branchFormatString}')"
             )
             ->addOption(
-                'head_repo',
+                'title',
                 NULL,
                 InputOption::VALUE_REQUIRED,
-                'From: the head repository where the branch exists'
+                'The title of the pull request'
             )
             ->addOption(
-                'head_branch',
-                NULL,
-                InputOption::VALUE_REQUIRED,
-                'From: the head branch where the pull request commits come from'
+                'body',
+                '',
+                InputOption::VALUE_OPTIONAL,
+                'The body (description) of the pull request'
             )
         ;
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $this->validateOptions();
-        
         parent::execute($input, $output);
         
-        var_dump($this->options);
+        $this->validateOptions();
+        
+        $this->initializeOptions();
+        
+        $branchPr = new BranchPullRequest(
+            new BranchGithub(
+                $this->calculated['head']['user'], // it doesn't matter what user, since it uses the logged in user
+                $this->calculated['head']['repo'],
+                $this->calculated['head']['branch']
+            ),
+            new BranchGithub(
+                $this->calculated['base']['user'],
+                $this->calculated['base']['repo'],
+                $this->calculated['base']['branch']
+            ),
+            $this->options['title'],
+            $this->options['body']
+        );
+        
+        $result = $this->git->submitPullRequest($branchPr);
     }
     
     protected function validateOptions()
@@ -83,7 +108,33 @@ class PullRequest extends GitoradeCommand
         }
         
         if (!empty($failed)) {
-            throw new \ErrorException("The following options were not filled in:" . PHP_EOL . '* ' . implode(PHP_EOL . '* ', $failed));
+            throw new \ErrorException("The following required options were not filled in:" . PHP_EOL . '* ' . implode(PHP_EOL . '* ', $failed));
         }
+    }
+    
+    protected function initializeOptions()
+    {
+        if (is_null($this->options['body'])) {
+            $this->options['body'] = '';
+        }
+        
+        foreach (array('head', 'base') as $branchArg) {
+            $branchArgArray = $this->splitBranchArg($branchArg);
+            
+            $this->calculated[$branchArg]['user'] = $branchArgArray[0];
+            $this->calculated[$branchArg]['repo'] = $branchArgArray[1];
+            $this->calculated[$branchArg]['branch'] = $branchArgArray[2];
+        }
+    }
+    
+    protected function splitBranchArg($arg)
+    {
+        $argArray = explode('/', $this->options[$arg]);
+    
+        if (count($argArray) != 3) {
+            throw new \ErrorException("Argument '$arg' ({$this->options[$arg]}) is not in the proper format ({$this->branchFormatString})");
+        }
+    
+        return $argArray;
     }
 }
