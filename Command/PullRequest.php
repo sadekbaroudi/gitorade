@@ -142,6 +142,10 @@ class PullRequest extends GitoradeCommand
     
     protected function formatPullRequestResponse($prResponse)
     {
-        return "Pull request number {$prResponse['number']} submitted!";
+        if (!empty($prResponse['number'])) {
+            return "Pull request number {$prResponse['number']} merged!";
+        } else {
+            return "No pull request submitted.";
+        }
     }
 }
