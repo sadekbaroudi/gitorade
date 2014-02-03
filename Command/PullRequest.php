@@ -95,6 +95,8 @@ class PullRequest extends GitoradeCommand
         );
         
         $result = $this->git->submitPullRequest($branchPr);
+        
+        $output->write($this->formatPullRequestResponse($result) . PHP_EOL);
     }
     
     protected function validateOptions()
@@ -136,5 +138,10 @@ class PullRequest extends GitoradeCommand
         }
     
         return $argArray;
+    }
+    
+    protected function formatPullRequestResponse($prResponse)
+    {
+        return "Pull request number {$prResponse['number']} submitted!";
     }
 }
