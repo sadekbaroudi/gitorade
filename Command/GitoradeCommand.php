@@ -69,7 +69,6 @@ class GitoradeCommand extends Command {
         $this->setOutput($output);
         
         $this->git = new Gitorade($this->getContainer());
-        $this->git->initialize();
         
         $this->setDialog($this->getHelperSet()->get('dialog'));
     }

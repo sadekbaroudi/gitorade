@@ -52,6 +52,8 @@ class MergeUp extends GitoradeCommand
     {
         parent::execute($input, $output);
         
+        $this->git->initialize();
+        
         $this->config = new BranchConfiguration();
         
         if ($this->config->defaultWasLoaded()) {

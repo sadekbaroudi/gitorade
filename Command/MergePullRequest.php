@@ -57,6 +57,8 @@ class MergePullRequest extends GitoradeCommand
         
         $this->initializeOptions();
         
+        $this->git->initialize();
+        
         $result = $this->git->getGithubClient()->api('pull_request')->merge(
             $this->calculated['pull']['user'],
             $this->calculated['pull']['repo'],

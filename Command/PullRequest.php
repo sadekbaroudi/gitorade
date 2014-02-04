@@ -79,6 +79,8 @@ class PullRequest extends GitoradeCommand
         
         $this->initializeOptions();
         
+        $this->git->initialize();
+        
         $branchPr = new BranchPullRequest(
             new BranchGithub(
                 $this->calculated['head']['user'], // it doesn't matter what user, since it uses the logged in user
