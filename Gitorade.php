@@ -21,6 +21,16 @@ use Sadekbaroudi\Gitorade\Branches\BranchMerge;
 use Sadekbaroudi\Gitorade\Branches\BranchLocal;
 use Sadekbaroudi\Gitorade\Branches\BranchGithub;
 
+/**
+ * Gitorade class will handle a lot of your git operations, both on the git command line and 
+ * on github.
+ * 
+ * IMPORTANT: After instantiating this object, you will need to call initialize() explicitly before
+ * using the class!
+ * 
+ * @author sadek
+ *
+ */
 class Gitorade {
     
     const NO_COMMITS = 422;
