@@ -1,0 +1,7 @@
+To use the Custom directory, create a directory structure that matches the base Gitorade application
+and use the namespace in the template:
+
+* Sadekbaroudi\Gitorade\Custom\{$pathToFile}
+
+Currently, only Command will be implicitly picked up by the application. This will allow you to add
+new Commands without having to modify the core directories
