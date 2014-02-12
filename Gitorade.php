@@ -241,7 +241,7 @@ class Gitorade {
         if (!$this->getGit()->isCloned()) {
             $this->getGit()->cloneRepository($this->getGitCliConfig()->getConfig('repository'));
         } else {
-            $this->fetch($this->getGitCliConfig()->getConfig('alias'));
+            $this->fetch($this->getGitCliConfig()->getConfig('upstream_alias'));
         }
         
         $this->setBm($this->getContainer()->get('BranchManager'));
@@ -297,7 +297,7 @@ class Gitorade {
         $logMe = "Merged " . $branchMerge->getBranchFrom() . " to " . $branchMerge->getBranchTo() . PHP_EOL;
         
         // Begin with pushing merged branch to remote
-        $remoteBranch = new BranchRemote("remotes/" . $this->getGitCliConfig()->getConfig('push_alias') . "/" . $branchMerge->getMergeName());
+        $remoteBranch = new BranchRemote("remotes/" . $this->getGitCliConfig()->getConfig('fork_alias') . "/" . $branchMerge->getMergeName());
         $remoteBranch->setMergeName($branchMerge->getBranchTo()->getBranch());
         
         $localBranch = new BranchLocal($branchMerge->getMergeName());
@@ -327,7 +327,7 @@ class Gitorade {
         
             $returnArray['pullRequest'] = new BranchPullRequest(
                 new BranchGithub(
-                    $this->getGitCliConfig()->getConfig('push_alias'),
+                    $this->getGitCliConfig()->getConfig('fork_alias'),
                     $branchMerge->getBranchFrom()->getAlias(), // This is not used, since it's defined by the base repo
                     $branchMerge->getBranchFrom()->getBranch()
                 ),            
