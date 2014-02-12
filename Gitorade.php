@@ -263,28 +263,9 @@ class Gitorade {
     {
         $this->validateForMerge($branchMerge);
         
-        $beforeMergeBranch = $this->currentBranch();
-        
-        $this->stash();
-        
-        // TODO: PHP 5.4 supports "new Foo()->method()->method()"
-        //       http://docs.php.net/manual/en/migration54.new-features.php
-        $os = new OperationState();
-        $os->setExecute(array($this->getGit(), 'checkout'), array((string)$branchMerge->getBranchTo()));
-        $os->addExecute(array($this->getGit(), 'checkoutNewBranch'), array($branchMerge->getMergeName()));
-        $os->setUndo(array($this->getGit(), 'reset'), array(array('hard' => true)));
-        $os->addUndo(array($this->getGit(), 'checkout'), array($beforeMergeBranch));
-        $os->addUndo(array($this->getGit(), 'branch'), array($branchMerge->getMergeName(), array('D' => true)));
-        
-        $this->getOsm()->add($os);
-        try {
-            echo "checking out " . $branchMerge->getBranchTo() . PHP_EOL;
-            echo "checking out new local branch " . $branchMerge->getMergeName() . PHP_EOL;
-            $this->getOsm()->execute($os);
-        } catch (OperationStateException $e) {
-            $this->getOsm()->undoAll();
-            throw $e;
-        }
+        // Checkout the new branch based on the BranchMerge object
+        $localBranch = new BranchLocal($branchMerge->getMergeName());
+        $this->checkoutNewBranch($branchMerge->getBranchTo(), $localBranch);
         
         try {
             echo "merging " . $branchMerge->getBranchFrom() . " to " . $branchMerge->getBranchTo() . PHP_EOL;
@@ -299,8 +280,6 @@ class Gitorade {
         // Begin with pushing merged branch to remote
         $remoteBranch = new BranchRemote("remotes/" . $this->getGitCliConfig()->getConfig('fork_alias') . "/" . $branchMerge->getMergeName());
         $remoteBranch->setMergeName($branchMerge->getBranchTo()->getBranch());
-        
-        $localBranch = new BranchLocal($branchMerge->getMergeName());
         $localBranch->setRemote($remoteBranch);
         
         try {
@@ -442,6 +421,39 @@ class Gitorade {
     }
     
     /**
+     * This will checkout a new branch based on $source with branch name of $new
+     * 
+     * @param Sadekbaroudi\Gitorade\Branches\Branch $source can be Sadekbaroudi\Gitorade\Branches\BranchLocal or Sadekbaroudi\Gitorade\Branches\BranchRemote
+     * @param Sadekbaroudi\Gitorade\Branches\BranchLocal $new the new local branch based on $source
+     * @throws OperationStateException If any of the commands fail in the process
+     */
+    public function checkoutNewBranch($source, $new)
+    {
+        $beforeMergeBranch = $this->currentBranch();
+        
+        $this->stash();
+        
+        // TODO: PHP 5.4 supports "new Foo()->method()->method()"
+        //       http://docs.php.net/manual/en/migration54.new-features.php
+        $os = new OperationState();
+        $os->setExecute(array($this->getGit(), 'checkout'), array($source->fullBranchString()));
+        $os->addExecute(array($this->getGit(), 'checkoutNewBranch'), array($new->getBranch()));
+        $os->setUndo(array($this->getGit(), 'reset'), array(array('hard' => true)));
+        $os->addUndo(array($this->getGit(), 'checkout'), array($beforeMergeBranch));
+        $os->addUndo(array($this->getGit(), 'branch'), array($new->getBranch(), array('D' => true)));
+        
+        $this->getOsm()->add($os);
+        try {
+            echo "checking out {$source}" . PHP_EOL;
+            echo "checking out new local branch {$new}" . PHP_EOL;
+            $this->getOsm()->execute($os);
+        } catch (OperationStateException $e) {
+            $this->getOsm()->undoAll();
+            throw $e;
+        }
+    }
+    
+    /**
      * This method will simply delete the remote branch specified in $branchObject
      * 
      * @param Sadekbaroudi\Gitorade\Branches\BranchRemote $branchObject object representing branch to delete
@@ -457,7 +469,7 @@ class Gitorade {
      * @param Sadekbaroudi\Gitorade\Branches\BranchLocal $branchLocal branch object to push
      * @throws GitException
      */
-    protected function push(BranchLocal $branchLocal)
+    public function push(BranchLocal $branchLocal)
     {
         if (!$branchLocal->hasRemote()) {
             throw new GitException(__METHOD__ . ": The BranchLocal object must have a remote branch!");
